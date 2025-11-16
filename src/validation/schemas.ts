@@ -81,10 +81,11 @@ export const SafeDateSchema = z
   .optional();
 
 /**
- * Checks if a date string represents today in local timezone
+ * Checks if a date string represents today in system timezone
+ * Note: "System timezone" refers to the Node.js runtime's timezone, which should match Swift's TimeZone.current
  */
-// Bare YYYY-MM-DD strings parse in UTC in JS engines, so normalize them to local midnight.
-function parseDateRespectingLocalTimezone(dateString: string): Date | null {
+// Bare YYYY-MM-DD strings parse in UTC in JS engines, so normalize them to system midnight.
+function parseDateRespectingSystemTimezone(dateString: string): Date | null {
   if (BARE_DATE_PATTERN.test(dateString)) {
     const [yearString, monthString, dayString] = dateString.split('-');
     const year = Number(yearString);
@@ -106,7 +107,7 @@ function parseDateRespectingLocalTimezone(dateString: string): Date | null {
 
 function isTodayDateString(dateString: string): boolean {
   try {
-    const inputDate = parseDateRespectingLocalTimezone(dateString);
+    const inputDate = parseDateRespectingSystemTimezone(dateString);
     if (!inputDate) {
       return false;
     }

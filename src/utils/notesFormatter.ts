@@ -66,11 +66,10 @@ export function parseNoteComponents(notes?: string): NoteComponents {
   }
 
   const components: NoteComponents = {};
-
-  // Extract CRITICAL information
   const criticalMatch = notes.match(
     /^CRITICAL:\s*(.+?)\s*-\s*(.+?)(?:\n\n|\nRelated reminders:|$)/s,
   );
+
   if (criticalMatch) {
     components.criticalInfo = {
       reason: criticalMatch[1].trim(),
@@ -78,20 +77,17 @@ export function parseNoteComponents(notes?: string): NoteComponents {
     };
   }
 
-  // Extract related reminders section
   const relatedMatch = notes.match(/Related reminders:([\s\S]*)$/);
+  let originalContent = notes;
+
   if (relatedMatch) {
     components.relatedReminders = parseRelatedRemindersFromText(
       relatedMatch[1],
     );
+    originalContent = notes.replace(/Related reminders:[\s\S]*$/, '');
   }
 
-  // Extract original content (everything except CRITICAL and Related reminders)
-  let originalContent = notes;
-
-  // Remove CRITICAL section if present
   if (criticalMatch) {
-    // Match the entire CRITICAL line including the reason and details
     const criticalLine = `CRITICAL: ${criticalMatch[1].trim()} - ${criticalMatch[2].trim()}`;
     originalContent = originalContent.replace(
       new RegExp(
@@ -102,11 +98,6 @@ export function parseNoteComponents(notes?: string): NoteComponents {
     );
   }
 
-  // Remove Related reminders section if present
-  if (relatedMatch) {
-    originalContent = originalContent.replace(/Related reminders:[\s\S]*$/, '');
-  }
-
   originalContent = originalContent.trim();
   if (originalContent) {
     components.originalContent = originalContent;
@@ -115,6 +106,14 @@ export function parseNoteComponents(notes?: string): NoteComponents {
   return components;
 }
 
+const RELATIONSHIP_LABELS: Record<string, RelatedReminder['relationship']> = {
+  'Dependencies:': 'dependency',
+  'Follow-up tasks:': 'follow-up',
+  'Related reminders:': 'related',
+  'Blocked by:': 'blocked-by',
+  'Prerequisites:': 'prerequisite',
+};
+
 /**
  * Parse related reminders from formatted text
  * Extracts reminder IDs and titles from reference format: [Title] (ID: {id}) (List)
@@ -122,39 +121,29 @@ export function parseNoteComponents(notes?: string): NoteComponents {
 function parseRelatedRemindersFromText(text: string): RelatedReminder[] {
   const reminders: RelatedReminder[] = [];
   const lines = text.split('\n');
-
   let currentRelationship: RelatedReminder['relationship'] | null = null;
 
   for (const line of lines) {
     const trimmed = line.trim();
+    if (!trimmed) continue;
 
-    // Check if this is a relationship label
-    const relationshipLabels: Record<string, RelatedReminder['relationship']> =
-      {
-        'Dependencies:': 'dependency',
-        'Follow-up tasks:': 'follow-up',
-        'Related reminders:': 'related',
-        'Blocked by:': 'blocked-by',
-        'Prerequisites:': 'prerequisite',
-      };
-
-    for (const [label, relationship] of Object.entries(relationshipLabels)) {
+    for (const [label, relationship] of Object.entries(RELATIONSHIP_LABELS)) {
       if (trimmed.startsWith(label)) {
         currentRelationship = relationship;
         break;
       }
     }
 
-    // Parse reference format: - [Title] (ID: {id}) (List)
+    if (!currentRelationship) continue;
+
     const referenceMatch = trimmed.match(
       /^-\s*\[(.+?)\]\s*\(ID:\s*([^)]+)\)(?:\s*\((.+?)\))?$/,
     );
-    if (referenceMatch && currentRelationship) {
-      const [, title, id, list] = referenceMatch;
+    if (referenceMatch) {
       reminders.push({
-        id: id.trim(),
-        title,
-        list,
+        id: referenceMatch[2].trim(),
+        title: referenceMatch[1],
+        list: referenceMatch[3],
         relationship: currentRelationship,
       });
     }
@@ -171,33 +160,30 @@ export function mergeNoteComponents(
   existing: NoteComponents,
   updates: Partial<NoteComponents>,
 ): NoteComponents {
-  const merged: NoteComponents = {};
+  const merged: NoteComponents = {
+    criticalInfo: updates.criticalInfo || existing.criticalInfo,
+  };
 
-  // Merge critical info (new takes precedence)
-  merged.criticalInfo = updates.criticalInfo || existing.criticalInfo;
-
-  // Merge original content
   if (updates.originalContent && existing.originalContent) {
-    // If both exist, combine them
     merged.originalContent = `${existing.originalContent}\n\n${updates.originalContent}`;
   } else {
     merged.originalContent =
       updates.originalContent || existing.originalContent;
   }
 
-  // Merge related reminders (combine arrays, deduplicate by ID)
   const allRelated = [
     ...(existing.relatedReminders || []),
     ...(updates.relatedReminders || []),
   ];
-  const seen = new Set<string>();
-  merged.relatedReminders = allRelated.filter((r) => {
-    if (seen.has(r.id)) {
-      return false;
-    }
-    seen.add(r.id);
-    return true;
-  });
+
+  if (allRelated.length > 0) {
+    const seen = new Set<string>();
+    merged.relatedReminders = allRelated.filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
+  }
 
   return merged;
 }

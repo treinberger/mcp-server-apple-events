@@ -378,6 +378,11 @@ class RemindersManager {
             throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid date format. Use 'YYYY-MM-DD HH:mm:ss' or ISO 8601 format."])
         }
         
+        // Extract timezone from start date components (events typically use same timezone for start and end)
+        if let startComponents = parseDateComponents(from: startDateString) {
+            event.timeZone = startComponents.timeZone
+        }
+        
         event.startDate = startDate
         event.endDate = endDate
         event.isAllDay = isAllDay ?? false
@@ -415,6 +420,10 @@ class RemindersManager {
             guard let startDate = parseDate(from: startStr) else {
                 throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid start date format."])
             }
+            // Update timezone from start date components if provided
+            if let startComponents = parseDateComponents(from: startStr) {
+                event.timeZone = startComponents.timeZone
+            }
             event.startDate = startDate
         }
         
@@ -423,6 +432,10 @@ class RemindersManager {
                 throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid end date format."])
             }
             event.endDate = endDate
+            // If timezone not set from startDate, use endDate timezone
+            if event.timeZone == nil, let endComponents = parseDateComponents(from: endStr) {
+                event.timeZone = endComponents.timeZone
+            }
         }
         
         if let notesStr = notes { event.notes = notesStr }

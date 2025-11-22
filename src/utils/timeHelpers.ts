@@ -85,6 +85,13 @@ export function getTimeContext(): TimeContext {
   };
 }
 
+const TIME_OF_DAY_LABELS: Record<TimeContext['timeOfDay'], string> = {
+  morning: ' (morning)',
+  afternoon: ' (afternoon)',
+  evening: ' (evening)',
+  night: ' (night)',
+};
+
 /**
  * Create a human-readable time description for prompts
  */
@@ -100,32 +107,7 @@ function formatTimeDescription(
     hour12: true,
   });
 
-  let description = `Current time: ${dayOfWeek} at ${timeStr}`;
-
-  // Add context about time of day
-  switch (timeOfDay) {
-    case 'morning':
-      description += ' (morning)';
-      break;
-    case 'afternoon':
-      description += ' (afternoon)';
-      break;
-    case 'evening':
-      description += ' (evening)';
-      break;
-    case 'night':
-      description += ' (night)';
-      break;
-  }
-
-  // Add working hours context
-  if (isWorkingHours) {
-    description += ' - working hours';
-  } else {
-    description += ' - outside working hours';
-  }
-
-  return description;
+  return `Current time: ${dayOfWeek} at ${timeStr}${TIME_OF_DAY_LABELS[timeOfDay] || ''}${isWorkingHours ? ' - working hours' : ' - outside working hours'}`;
 }
 
 /**

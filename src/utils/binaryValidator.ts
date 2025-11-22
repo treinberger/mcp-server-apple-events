@@ -48,7 +48,6 @@ export function validateBinaryPath(
 ): void {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
 
-  // Validate path is absolute
   if (fullConfig.requireAbsolutePath && !path.isAbsolute(binaryPath)) {
     throw new BinaryValidationError(
       'Binary path must be absolute',
@@ -56,10 +55,7 @@ export function validateBinaryPath(
     );
   }
 
-  // Normalize path to prevent traversal attacks
   const normalizedPath = path.normalize(binaryPath);
-
-  // Check for path traversal attempts
   // istanbul ignore next - Defensive check that cannot be triggered through path.normalize()
   if (normalizedPath.includes('..')) {
     throw new BinaryValidationError(
@@ -68,19 +64,13 @@ export function validateBinaryPath(
     );
   }
 
-  // Validate path is in allowed directories
-  const isAllowedPath = fullConfig.allowedPaths.some((allowedPath) =>
-    normalizedPath.includes(allowedPath),
-  );
-
-  if (!isAllowedPath) {
+  if (!fullConfig.allowedPaths.some((p) => normalizedPath.includes(p))) {
     throw new BinaryValidationError(
       'Binary path not in allowed directories',
       'FORBIDDEN_PATH',
     );
   }
 
-  // Check if file exists
   if (!fs.existsSync(normalizedPath)) {
     throw new BinaryValidationError(
       `Binary file not found: ${normalizedPath}`,
@@ -88,9 +78,7 @@ export function validateBinaryPath(
     );
   }
 
-  // Validate file stats
   const stats = fs.statSync(normalizedPath);
-
   if (!stats.isFile()) {
     throw new BinaryValidationError(
       'Binary path does not point to a file',
@@ -105,7 +93,6 @@ export function validateBinaryPath(
     );
   }
 
-  // Check file permissions (should be executable)
   try {
     fs.accessSync(normalizedPath, fs.constants.X_OK);
   } catch (_error) {

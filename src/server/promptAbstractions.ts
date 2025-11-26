@@ -136,7 +136,7 @@ export const TIME_BLOCK_CREATION_CONSTRAINTS = [
   '  - Task notes mention "deep work", "focused time", "uninterrupted"',
   '  - Task explicitly marked as requiring focused/uninterrupted time',
   '  - Task benefits from calendar visibility to prevent double-booking',
-  `  - Always use ${TIME_FORMAT_SPEC} format for startDate and endDate (e.g., "2025-11-04 14:00:00" for 2PM)`,
+  `  - Always use ${TIME_FORMAT_SPEC} format for startDate and endDate (e.g., "2025-11-04 14:00:00-05:00" for 2PM EST)`,
   '  - Anchor calendar events to reminder due timestamps by subtracting duration to determine startDate. If start would be in the past, move forward but preserve duration.',
   '  - When multiple tasks share a project, use single block with shared objective in notes.',
   '  - For confidence levels and execution: Follow standard CONFIDENCE_CONSTRAINTS (>80% execute, 60-80% recommend, <60% confirm). Apply DEEP_WORK_CONSTRAINTS for block sizing and scheduling.',
@@ -149,7 +149,7 @@ export const getActionQueueFormat = (_currentDate: string): string[] => [
   '### Action queue — prioritized list of actions organized by confidence level (high/medium/low) and impact. IMPORTANT: High-confidence actions (>80%) should be EXECUTED immediately using MCP tool calls, not just described. Each action should specify:',
   '  - HIGH CONFIDENCE (>80%): Execute using tool calls. MEDIUM CONFIDENCE (60-80%): Provide recommendations in tool call format. LOW CONFIDENCE (<60%): Text description only, ask for confirmation.',
   '  - Each action must include: confidence level, action type (create/update/recommendation), exact properties (title, list, dueDate, note, url if applicable), and brief rationale',
-  `  - Use ${TIME_FORMAT_SPEC} format for dueDate (e.g., "2025-11-04 18:00:00").`,
+  `  - Use ${TIME_FORMAT_SPEC} format for dueDate (e.g., "2025-11-04 18:00:00-05:00").`,
 ];
 
 /**

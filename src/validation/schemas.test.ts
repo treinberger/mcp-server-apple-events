@@ -3,8 +3,6 @@
  * Tests for validation schemas
  */
 
-import { execFileSync } from 'node:child_process';
-import path from 'node:path';
 import { z } from 'zod/v3';
 import {
   CreateReminderListSchema,
@@ -16,44 +14,11 @@ import {
   SafeNoteSchema,
   SafeTextSchema,
   SafeUrlSchema,
-  TodayOnlyDateSchema,
   UpdateReminderListSchema,
   UpdateReminderSchema,
   ValidationError,
   validateInput,
 } from './schemas.js';
-
-const TZ_FIXTURE_PATH = path.resolve(
-  process.cwd(),
-  'src/validation/__fixtures__/todayOnlySchemaRunner.ts',
-);
-
-const runTimezoneFixture = (params: {
-  tz: string;
-  dateString: string;
-  nowString: string;
-  expectThrow: boolean;
-}) => {
-  const { tz, dateString, nowString, expectThrow } = params;
-  execFileSync(
-    process.execPath,
-    [
-      '--import',
-      'tsx',
-      TZ_FIXTURE_PATH,
-      dateString,
-      nowString,
-      expectThrow ? 'expect-throw' : 'expect-ok',
-    ],
-    {
-      env: {
-        ...process.env,
-        TZ: tz,
-      },
-      stdio: 'pipe',
-    },
-  );
-};
 
 describe('ValidationSchemas', () => {
   beforeEach(() => {
@@ -330,139 +295,6 @@ describe('ValidationSchemas', () => {
         expect(error).toBeInstanceOf(ValidationError);
         expect((error as Error).message).toContain('cannot be empty');
       }
-    });
-  });
-
-  describe('TodayOnlyDateSchema', () => {
-    beforeEach(() => {
-      jest.useFakeTimers();
-    });
-
-    afterEach(() => {
-      jest.useRealTimers();
-    });
-
-    it('should accept today dates in various formats', () => {
-      const now = new Date('2024-11-14T10:30:00');
-      jest.setSystemTime(now);
-
-      expect(() => TodayOnlyDateSchema.parse('2024-11-14')).not.toThrow();
-      expect(() =>
-        TodayOnlyDateSchema.parse('2024-11-14 10:30:00'),
-      ).not.toThrow();
-      expect(() =>
-        TodayOnlyDateSchema.parse('2024-11-14T10:30:00Z'),
-      ).not.toThrow();
-    });
-
-    it('should reject yesterday dates', () => {
-      const now = new Date('2024-11-14T10:30:00');
-      jest.setSystemTime(now);
-
-      expect(() => TodayOnlyDateSchema.parse('2024-11-13')).toThrow(
-        'Date must be today',
-      );
-      expect(() => TodayOnlyDateSchema.parse('2024-11-13 23:59:59')).toThrow(
-        'Date must be today',
-      );
-    });
-
-    it('should reject tomorrow dates', () => {
-      const now = new Date('2024-11-14T10:30:00');
-      jest.setSystemTime(now);
-
-      expect(() => TodayOnlyDateSchema.parse('2024-11-15')).toThrow(
-        'Date must be today',
-      );
-      expect(() => TodayOnlyDateSchema.parse('2024-11-15 00:00:00')).toThrow(
-        'Date must be today',
-      );
-    });
-
-    it('should reject invalid date format', () => {
-      const now = new Date('2024-11-14T10:30:00');
-      jest.setSystemTime(now);
-
-      expect(() => TodayOnlyDateSchema.parse('not-a-date')).toThrow();
-      expect(() => TodayOnlyDateSchema.parse('11/14/2024')).toThrow();
-    });
-
-    it('should accept undefined as optional', () => {
-      expect(() => TodayOnlyDateSchema.parse(undefined)).not.toThrow();
-    });
-
-    it('should handle edge case at midnight', () => {
-      const midnight = new Date('2024-11-14T00:00:00');
-      jest.setSystemTime(midnight);
-
-      expect(() =>
-        TodayOnlyDateSchema.parse('2024-11-14 00:00:00'),
-      ).not.toThrow();
-      expect(() => TodayOnlyDateSchema.parse('2024-11-13 23:59:59')).toThrow(
-        'Date must be today',
-      );
-    });
-
-    it('should handle edge case before midnight', () => {
-      const beforeMidnight = new Date('2024-11-14T23:59:59');
-      jest.setSystemTime(beforeMidnight);
-
-      expect(() =>
-        TodayOnlyDateSchema.parse('2024-11-14 23:59:59'),
-      ).not.toThrow();
-      expect(() => TodayOnlyDateSchema.parse('2024-11-15 00:00:00')).toThrow(
-        'Date must be today',
-      );
-    });
-
-    it('should treat bare dates as local time in western timezones', () => {
-      expect(() =>
-        runTimezoneFixture({
-          tz: 'America/Los_Angeles',
-          dateString: '2024-11-14',
-          nowString: '2024-11-14T12:00:00-08:00',
-          expectThrow: false,
-        }),
-      ).not.toThrow();
-    });
-
-    it('should reject tomorrow bare dates in eastern timezones', () => {
-      expect(() =>
-        runTimezoneFixture({
-          tz: 'Asia/Tokyo',
-          dateString: '2024-11-15',
-          nowString: '2024-11-14T12:00:00+09:00',
-          expectThrow: true,
-        }),
-      ).not.toThrow();
-    });
-  });
-
-  describe('TodayOnlyDateSchema edge cases', () => {
-    it('should reject malformed date patterns that would cause parsing errors', () => {
-      const malformedDates = [
-        'invalid-date',
-        '2024-13-01', // Invalid month
-        '2024-02-30', // Invalid day
-        '20-24-01-01', // Invalid format
-        'abcd-ef-gh', // Non-numeric
-        '2024-12-ab', // Non-numeric components
-        '2024-ab-01', // Non-numeric components
-        'ab-12-01', // Non-numeric components
-      ];
-
-      malformedDates.forEach((dateString) => {
-        expect(() => TodayOnlyDateSchema.parse(dateString)).toThrow();
-      });
-    });
-
-    it('should handle extreme date values gracefully', () => {
-      const extremeDates = ['999999999-12-31', '-999999999-01-01'];
-
-      extremeDates.forEach((dateString) => {
-        // Should throw validation error but not crash with unhandled exception
-        expect(() => TodayOnlyDateSchema.parse(dateString)).toThrow();
-      });
     });
   });
 

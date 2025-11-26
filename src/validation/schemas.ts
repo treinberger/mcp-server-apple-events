@@ -7,7 +7,6 @@
 
 import { z } from 'zod/v3';
 import { VALIDATION } from '../utils/constants.js';
-import { getTodayStart, getTomorrowStart } from '../utils/dateUtils.js';
 
 // Security patterns – allow printable Unicode text while blocking dangerous control and delimiter chars.
 // Allows standard printable ASCII, extended Latin, CJK, plus newlines/tabs for notes.
@@ -17,7 +16,6 @@ const SAFE_TEXT_PATTERN = /^[\u0020-\u007E\u00A0-\uFFFF\n\r\t]*$/u;
 // Support multiple date formats: YYYY-MM-DD, YYYY-MM-DD HH:mm:ss, or ISO 8601
 // Basic validation - detailed parsing handled by Swift
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}.*$/;
-const BARE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 // URL validation that blocks internal/private network addresses and localhost
 // Prevents SSRF attacks while allowing legitimate external URLs
 const URL_PATTERN =
@@ -95,55 +93,6 @@ export const SafeDateSchema = z
     DATE_PATTERN,
     "Date must be in format 'YYYY-MM-DD', 'YYYY-MM-DD HH:mm:ss', or ISO 8601 (e.g., '2025-10-30T04:00:00Z')",
   )
-  .optional();
-
-/**
- * Checks if a date string represents today in system timezone
- * Note: "System timezone" refers to the Node.js runtime's timezone, which should match Swift's TimeZone.current
- */
-// Bare YYYY-MM-DD strings parse in UTC in JS engines, so normalize them to system midnight.
-function parseDateRespectingSystemTimezone(dateString: string): Date | null {
-  if (BARE_DATE_PATTERN.test(dateString)) {
-    const [yearString, monthString, dayString] = dateString.split('-');
-    const year = Number(yearString);
-    const monthIndex = Number(monthString) - 1;
-    const day = Number(dayString);
-    if ([year, monthIndex, day].some(Number.isNaN)) {
-      return null;
-    }
-    return new Date(year, monthIndex, day);
-  }
-
-  const parsedDate = new Date(dateString);
-  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
-}
-
-function isTodayDateString(dateString: string): boolean {
-  try {
-    const inputDate = parseDateRespectingSystemTimezone(dateString);
-    if (!inputDate) {
-      return false;
-    }
-    const today = getTodayStart();
-    const tomorrow = getTomorrowStart();
-    return inputDate >= today && inputDate < tomorrow;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Date schema that enforces today-only policy (local timezone)
- */
-export const TodayOnlyDateSchema = z
-  .string()
-  .regex(
-    DATE_PATTERN,
-    "Date must be in format 'YYYY-MM-DD', 'YYYY-MM-DD HH:mm:ss', or ISO 8601",
-  )
-  .refine(isTodayDateString, {
-    message: 'Date must be today (not past or future dates)',
-  })
   .optional();
 
 /**

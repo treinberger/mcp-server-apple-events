@@ -20,6 +20,10 @@ const promptedDomains = new Set<PermissionDomain>();
 /**
  * Triggers the corresponding AppleScript to surface a macOS permission dialog.
  * Uses simple memoization to avoid spawning duplicate dialogs.
+ *
+ * This function is designed to be called proactively before the first Swift CLI call
+ * to ensure permission dialogs appear even in non-interactive contexts where the
+ * Swift binary's native EventKit permission request may be suppressed.
  */
 export async function triggerPermissionPrompt(
   domain: PermissionDomain,
@@ -34,6 +38,8 @@ export async function triggerPermissionPrompt(
     await execFileAsync('osascript', ['-e', script]);
     promptedDomains.add(domain);
   } catch {
+    // Mark as prompted even on error to avoid infinite retry loops
+    // The error might be due to permission denial, which we'll handle downstream
     promptedDomains.add(domain);
   }
 }

@@ -44,6 +44,7 @@ src/
 │       └── calendarHandlers.ts
 ├── utils/
 │   ├── cliExecutor.ts    # Executes Swift binary, parses JSON responses
+│   ├── permissionPrompt.ts  # AppleScript-based permission prompting
 │   ├── reminderRepository.ts  # Repository pattern for reminders
 │   ├── calendarRepository.ts  # Repository pattern for calendar events
 │   ├── binaryValidator.ts     # Secure binary path validation
@@ -61,9 +62,24 @@ src/
 3. Tool router normalizes name (supports both `reminders_tasks` and `reminders.tasks`)
 4. Action router dispatches to specific handler (e.g., `handleCreateReminder`)
 5. Handler validates input via Zod schema, calls repository
-6. Repository calls `executeCli()` which runs Swift binary
+6. Repository calls `executeCli()` which:
+   - Proactively triggers AppleScript permission prompt on first access
+   - Runs Swift binary for EventKit operations
+   - Retries with AppleScript fallback on permission errors
 7. Swift binary performs EventKit operations, returns JSON
 8. Response flows back through layers as `CallToolResult`
+
+### Permission Handling
+
+The server implements a two-layer permission prompt strategy:
+
+1. **Proactive AppleScript Prompt**: On the first access to reminders or calendars, `executeCli()` proactively triggers an AppleScript command to ensure the permission dialog appears, even in non-interactive contexts where the Swift binary's native EventKit permission request may be suppressed.
+
+2. **Swift Binary Permission Check**: The Swift binary checks authorization status and requests permissions through EventKit's native API.
+
+3. **Retry with AppleScript Fallback**: If a permission error occurs after the Swift binary runs, the system retries once with the AppleScript fallback.
+
+This approach ensures permission dialogs appear reliably for MCP clients running in non-interactive contexts (e.g., Claude Code, terminal-based tools).
 
 ### Swift Bridge
 

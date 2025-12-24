@@ -14,7 +14,10 @@ import {
   getEnvironmentBinaryConfig,
 } from './binaryValidator.js';
 import { CliPermissionError, executeCli } from './cliExecutor.js';
-import { triggerPermissionPrompt } from './permissionPrompt.js';
+import {
+  hasBeenPrompted,
+  triggerPermissionPrompt,
+} from './permissionPrompt.js';
 import { findProjectRoot } from './projectUtils.js';
 
 type ExecFileCallback =
@@ -36,6 +39,7 @@ jest.mock('./binaryValidator.js', () => ({
 }));
 jest.mock('./permissionPrompt.js', () => ({
   triggerPermissionPrompt: jest.fn().mockResolvedValue(undefined),
+  hasBeenPrompted: jest.fn().mockReturnValue(false),
   resetPromptedDomains: jest.fn(),
 }));
 
@@ -54,6 +58,9 @@ const mockTriggerPermissionPrompt =
   triggerPermissionPrompt as jest.MockedFunction<
     typeof triggerPermissionPrompt
   >;
+const mockHasBeenPrompted = hasBeenPrompted as jest.MockedFunction<
+  typeof hasBeenPrompted
+>;
 
 describe('cliExecutor', () => {
   beforeEach(() => {
@@ -63,6 +70,8 @@ describe('cliExecutor', () => {
     mockFindSecureBinaryPath.mockReturnValue({
       path: '/test/project/bin/EventKitCLI',
     });
+    // Default: simulate that permission has not been prompted yet
+    mockHasBeenPrompted.mockReturnValue(false);
   });
 
   const invokeCallback = (
@@ -94,6 +103,8 @@ describe('cliExecutor', () => {
       const result = await executeCli(['--action', 'read', '--id', '123']);
 
       expect(result).toEqual({ id: '123', title: 'Test reminder' });
+      // Proactive permission prompt should be called first
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith('reminders');
       expect(mockExecFile).toHaveBeenCalledWith(
         '/test/project/bin/EventKitCLI',
         ['--action', 'read', '--id', '123'],
@@ -243,9 +254,19 @@ describe('cliExecutor', () => {
       await expect(executeCli(['--action', 'read'])).rejects.toThrow(
         'Reminder permission denied.',
       );
-      // CLI is called twice: once initially, once after permission prompt
+      // Proactive prompt is called once, then retry prompt is called once
+      // Total: 2 calls to triggerPermissionPrompt
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'reminders',
+      );
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'reminders',
+      );
+      // CLI is called twice: once after proactive prompt, once after retry prompt
       expect(mockExecFile).toHaveBeenCalledTimes(2);
-      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(1);
     });
 
     it('throws permission error when calendar access is denied after retry', async () => {
@@ -272,9 +293,19 @@ describe('cliExecutor', () => {
         'Calendar permission denied.',
       );
 
-      // CLI is called twice: once initially, once after permission prompt
+      // Proactive prompt for calendars is called once, then retry prompt is called once
+      // Total: 2 calls to triggerPermissionPrompt
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'calendars',
+      );
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'calendars',
+      );
+      // CLI is called twice: once after proactive prompt, once after retry prompt
       expect(mockExecFile).toHaveBeenCalledTimes(2);
-      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(1);
     });
 
     it('throws authorization error immediately', async () => {
@@ -492,7 +523,8 @@ describe('cliExecutor', () => {
 
       // Should call CLI twice (initial + retry) but not more
       expect(mockExecFile).toHaveBeenCalledTimes(2);
-      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(1);
+      // Proactive prompt is called once, then retry prompt is called once
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
     });
 
     it('does not trigger permission prompt for non-permission errors', async () => {
@@ -517,7 +549,60 @@ describe('cliExecutor', () => {
       );
 
       expect(mockExecFile).toHaveBeenCalledTimes(1);
+      // Proactive prompt is still called once at the start, but not retried
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(1);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith('reminders');
+    });
+
+    it('should skip proactive permission prompt when already prompted', async () => {
+      // Simulate that permission has already been prompted
+      mockHasBeenPrompted.mockReturnValue(true);
+
+      const mockStdout = JSON.stringify({
+        status: 'success',
+        result: { id: '123', title: 'Test reminder' },
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        cb?.(null, mockStdout, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const result = await executeCli(['--action', 'read', '--id', '123']);
+
+      expect(result).toEqual({ id: '123', title: 'Test reminder' });
+      // Permission prompt should NOT be called because hasBeenPrompted returns true
       expect(mockTriggerPermissionPrompt).not.toHaveBeenCalled();
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('should trigger proactive permission prompt for calendar actions', async () => {
+      const mockStdout = JSON.stringify({
+        status: 'success',
+        result: { calendars: [], events: [] },
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        cb?.(null, mockStdout, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      await executeCli(['--action', 'read-events']);
+
+      // Should proactively trigger calendars permission
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith('calendars');
     });
   });
 

@@ -13,6 +13,7 @@ import {
 } from './binaryValidator.js';
 import { FILE_SYSTEM } from './constants.js';
 import {
+  hasBeenPrompted,
   type PermissionDomain,
   triggerPermissionPrompt,
 } from './permissionPrompt.js';
@@ -65,6 +66,31 @@ const PERMISSION_ERROR_PATTERNS: Record<PermissionDomain, RegExp[]> = {
     /not authorized.*calendar/i,
   ],
 };
+
+/**
+ * Calendar-specific action names used in Swift CLI
+ */
+const CALENDAR_ACTIONS = new Set([
+  'read-events',
+  'read-calendars',
+  'create-event',
+  'update-event',
+  'delete-event',
+]);
+
+/**
+ * Detects which permission domain an action requires
+ * @param args - CLI arguments array
+ * @returns The permission domain ('reminders' or 'calendars')
+ */
+function detectActionDomain(args: string[]): PermissionDomain {
+  const actionIndex = args.indexOf('--action');
+  if (actionIndex !== -1 && actionIndex + 1 < args.length) {
+    const action = args[actionIndex + 1];
+    return CALENDAR_ACTIONS.has(action) ? 'calendars' : 'reminders';
+  }
+  return 'reminders'; // Default to reminders if action not found
+}
 
 /**
  * Detects if an error message indicates a permission issue
@@ -161,8 +187,8 @@ const runCli = async <T>(cliPath: string, args: string[]): Promise<T> => {
  * @description
  * - Locates binary using secure path validation
  * - Parses JSON response from Swift CLI
- * - Automatically triggers permission prompts via AppleScript on permission errors
- * - Retries the operation once after triggering the permission prompt
+ * - Proactively triggers permission prompts via AppleScript on first access
+ * - Automatically retries with AppleScript fallback on permission errors
  * @example
  * const result = await executeCli<Reminder[]>(['--action', 'read', '--showCompleted', 'true']);
  */
@@ -187,6 +213,16 @@ export async function executeCli<T>(args: string[]): Promise<T> {
     throw new Error(
       `EventKitCLI binary not found or validation failed. Searched: ${possiblePaths.join(', ')}`,
     );
+  }
+
+  // Detect which permission domain this action requires
+  const domain = detectActionDomain(args);
+
+  // Proactively trigger AppleScript permission prompt on first access
+  // This ensures the permission dialog appears even in non-interactive contexts
+  // where the Swift binary's native EventKit permission request may be suppressed
+  if (!hasBeenPrompted(domain)) {
+    await triggerPermissionPrompt(domain);
   }
 
   let hasRetried = false;

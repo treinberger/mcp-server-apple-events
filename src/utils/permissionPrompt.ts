@@ -15,49 +15,42 @@ const APPLESCRIPT_SNIPPETS: Record<PermissionDomain, string> = {
   calendars: 'tell application "Calendar" to get the name of every calendar',
 };
 
-const promptedDomains = new Set<PermissionDomain>();
+const promptPromises = new Map<PermissionDomain, Promise<void>>();
 
 /**
- * Triggers the corresponding AppleScript to surface a macOS permission dialog.
- * Uses simple memoization to avoid spawning duplicate dialogs.
- *
- * This function is designed to be called proactively before the first Swift CLI call
- * to ensure permission dialogs appear even in non-interactive contexts where the
- * Swift binary's native EventKit permission request may be suppressed.
- *
- * @param domain - The permission domain to prompt for
- * @param force - If true, bypasses the memoization check and forces the prompt even if already prompted
+ * Triggers AppleScript to surface macOS permission dialogs with promise-based memoization
  */
 export async function triggerPermissionPrompt(
   domain: PermissionDomain,
   force = false,
 ): Promise<void> {
-  if (!force && promptedDomains.has(domain)) {
-    return;
+  if (!force && promptPromises.has(domain)) {
+    const existingPromise = promptPromises.get(domain);
+    if (existingPromise) {
+      return existingPromise;
+    }
   }
+
+  const promise = (async () => {
+    const script = APPLESCRIPT_SNIPPETS[domain];
+    try {
+      await execFileAsync('osascript', ['-e', script]);
+    } catch {
+      // Ignore errors - the goal is to trigger the prompt
+    }
+  })();
 
   if (!force) {
-    promptedDomains.add(domain);
+    promptPromises.set(domain, promise);
   }
 
-  const script = APPLESCRIPT_SNIPPETS[domain];
-
-  try {
-    await execFileAsync('osascript', ['-e', script]);
-    if (force) {
-      promptedDomains.add(domain);
-    }
-  } catch {
-    if (force) {
-      promptedDomains.add(domain);
-    }
-  }
+  return promise;
 }
 
 export function hasBeenPrompted(domain: PermissionDomain): boolean {
-  return promptedDomains.has(domain);
+  return promptPromises.has(domain);
 }
 
 export function resetPromptedDomains(): void {
-  promptedDomains.clear();
+  promptPromises.clear();
 }

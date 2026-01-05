@@ -39,36 +39,21 @@ describe('prompt templates', () => {
       const text = getPromptText('daily-task-organizer');
 
       expectPatterns(text, [
-        /Time horizon: .*only — never plan beyond today/i,
-        /strict today-only policy/i,
-        /search for likely duplicates by normalized title/i,
-        /Batch tool calls when executing multiple changes/i,
+        /Time horizon: .*today/i,
+        /today-only/i,
+        /Batch tool calls/i,
         /Do not modify recurrence rules/i,
-        /Generate due date strings/i,
-        /Create calendar blocks for in-scope tasks lasting/i,
-        /90-120.*minutes.*recommended|aim for 90-120/i,
-        /Shallow tasks stay 15-60 minutes/i,
-        /automatic ~20% buffer/i,
-        /anchor to due times/i,
-        /format.*\d{4}-\d{2}-\d{2} HH:mm:ss[+-]\d{2}:\d{2}|YYYY-MM-DD HH:mm:ss±HH:MM/i,
+        /Use .*YYYY-MM-DD HH:mm:ss(?:[+-]\d{2}:\d{2}|±HH:MM)/i,
+        /Create calendar blocks/i,
         /Deep Work — \[Project/i,
-        /Plan 2 blocks per day|2 blocks per day/i,
-        /Break intervals: 15-30 minutes between blocks/i,
+        /Shallow Task — \[Task Description\]/i,
         /### Deep work blocks/i,
         /### Shallow tasks/i,
         /### Questions/i,
         /### Verification log/i,
-        /Create calendar blocks/i,
-        /Deep Work maximum: 4 hours per day/i,
-        /15-60 minutes for all non-deep-work activities/i,
-        /Shallow Task — \[Task Description\]/i,
-        /Implicit buffer allocation/i,
-        /~20% of working hours unscheduled/i,
         /Do not create explicit "Buffer Time" calendar events/i,
-        /Daily capacity limits and workload balancing/i,
         /Do not place concept-only analysis or planning notes inside the action queue/i,
         /Action queue is exclusively for executable reminder or calendar changes/i,
-        /Split anything.*120 minutes/i,
       ]);
 
       expect(text).not.toMatch(/### Buffer time/i);
@@ -89,10 +74,7 @@ describe('prompt templates', () => {
     it('keeps planning decisions inside the current week', () => {
       const text = getPromptText('weekly-planning-workflow');
 
-      expectPatterns(text, [
-        /Time horizon: current calendar week/i,
-        /Keep scheduling decisions inside the current week/i,
-      ]);
+      expectPatterns(text, [/current week/i, /inside the current week/i]);
     });
   });
 

@@ -62,7 +62,7 @@ const mockHasBeenPrompted = hasBeenPrompted as jest.MockedFunction<
   typeof hasBeenPrompted
 >;
 const PERMISSION_FALLBACK_INSTRUCTION =
-  '让工具直接编写AppleScript申请日历/提醒权限的代码然后运行';
+  'To resolve this, ask the tool to generate and run the AppleScript code to request calendar/reminder permissions.';
 
 describe('cliExecutor', () => {
   beforeEach(() => {
@@ -309,7 +309,8 @@ describe('cliExecutor', () => {
     it('treats write-only reminder access as a permission error', async () => {
       const permissionError = JSON.stringify({
         status: 'error',
-        message: 'Reminder permission is write-only, but read access is required.',
+        message:
+          'Reminder permission is write-only, but read access is required.',
       });
 
       mockExecFile.mockImplementation(((

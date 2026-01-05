@@ -81,7 +81,7 @@ const CALENDAR_ACTIONS = new Set([
 ]);
 
 const PERMISSION_FALLBACK_INSTRUCTION =
-  '让工具直接编写AppleScript申请日历/提醒权限的代码然后运行';
+  'To resolve this, ask the tool to generate and run the AppleScript code to request calendar/reminder permissions.';
 
 /**
  * Detects which permission domain an action requires

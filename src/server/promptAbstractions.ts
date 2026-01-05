@@ -23,7 +23,7 @@ export const NOTE_FORMATTING_CONSTRAINTS = [
   'For new reminders, add only user-supplied context; no rationale, priority, or scheduling commentary.',
   'Allowed lines: See: [URL], Note: [brief context], Duration: [time estimate].',
   'Only include Note: or Duration: if the user explicitly provided them.',
-  'Never include priority/urgency labels (Priority/P0/紧急/etc.).',
+  'Never include priority/urgency labels (Priority/P0/Urgent/etc.).',
   'No markdown; plain text only, use "-" bullets and "\\n" line breaks.',
 ];
 
@@ -119,7 +119,7 @@ export const TIME_FORMAT_SPEC =
  */
 export const TIME_BLOCK_CREATION_CONSTRAINTS = [
   '**Time block creation triggers**: Create calendar_events blocks when tasks meet ANY criteria:',
-  '  - Duration >=60 minutes due today, or deep-work keywords (开发, 设计, 分析, 规划, 重构, 架构).',
+  '  - Duration >=60 minutes due today, or deep-work keywords (development, design, analysis, planning, refactor, architecture).',
   '  - Multiple related tasks due today totaling >=60 minutes, or explicit focus/uninterrupted cues.',
   `  - Use ${TIME_FORMAT_SPEC} format for startDate and endDate.`,
   '  - Anchor start time to due time minus duration; if past, move forward but keep duration.',

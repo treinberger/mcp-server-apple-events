@@ -204,7 +204,7 @@ describe('Server Handlers', () => {
         expect(result.messages[0].content.type).toBe('text');
         const text = (result.messages[0].content as MessageContent).text;
         expect(text).toContain('Focus: same-day organizing');
-        expect(text).toContain('only — never plan beyond today');
+        expect(text).toContain('today only — do not plan beyond today');
       });
 
       it.each([

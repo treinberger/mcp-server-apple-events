@@ -24,8 +24,23 @@ export async function triggerPermissionPrompt(
   domain: PermissionDomain,
   force = false,
 ): Promise<void> {
-  if (!force && promptPromises.has(domain)) {
-    return promptPromises.get(domain)!;
+  if (!force) {
+    const existing = promptPromises.get(domain);
+    if (existing) {
+      return existing;
+    }
+
+    const promise = (async () => {
+      const script = APPLESCRIPT_SNIPPETS[domain];
+      try {
+        await execFileAsync('osascript', ['-e', script]);
+      } catch {
+        // Ignore errors - the goal is to trigger the prompt
+      }
+    })();
+
+    promptPromises.set(domain, promise);
+    return promise;
   }
 
   const promise = (async () => {
@@ -36,10 +51,6 @@ export async function triggerPermissionPrompt(
       // Ignore errors - the goal is to trigger the prompt
     }
   })();
-
-  if (!force) {
-    promptPromises.set(domain, promise);
-  }
 
   return promise;
 }

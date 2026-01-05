@@ -59,11 +59,13 @@ const PERMISSION_ERROR_PATTERNS: Record<PermissionDomain, RegExp[]> = {
     /reminder permission denied/i,
     /reminders access denied/i,
     /not authorized.*reminders/i,
+    /reminder permission is write-only/i,
   ],
   calendars: [
     /calendar permission denied/i,
     /calendar access denied/i,
     /not authorized.*calendar/i,
+    /calendar permission is write-only/i,
   ],
 };
 
@@ -77,6 +79,9 @@ const CALENDAR_ACTIONS = new Set([
   'update-event',
   'delete-event',
 ]);
+
+const PERMISSION_FALLBACK_INSTRUCTION =
+  '让工具直接编写AppleScript申请日历/提醒权限的代码然后运行';
 
 /**
  * Detects which permission domain an action requires
@@ -104,6 +109,13 @@ function detectPermissionError(message: string): PermissionDomain | null {
     }
   }
   return null;
+}
+
+function appendPermissionFallbackInstruction(message: string): string {
+  if (message.includes(PERMISSION_FALLBACK_INSTRUCTION)) {
+    return message;
+  }
+  return `${message}\n\n${PERMISSION_FALLBACK_INSTRUCTION}`;
 }
 
 /**
@@ -231,7 +243,17 @@ export async function executeCli<T>(args: string[]): Promise<T> {
     // On permission error, trigger AppleScript prompt and retry once
     if (error instanceof CliPermissionError) {
       await triggerPermissionPrompt(error.domain, true);
-      return await runCli<T>(cliPath, args);
+      try {
+        return await runCli<T>(cliPath, args);
+      } catch (retryError) {
+        if (retryError instanceof CliPermissionError) {
+          throw new CliPermissionError(
+            appendPermissionFallbackInstruction(retryError.message),
+            retryError.domain,
+          );
+        }
+        throw retryError;
+      }
     }
     throw error;
   }

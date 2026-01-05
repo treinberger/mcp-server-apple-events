@@ -61,6 +61,8 @@ const mockTriggerPermissionPrompt =
 const mockHasBeenPrompted = hasBeenPrompted as jest.MockedFunction<
   typeof hasBeenPrompted
 >;
+const PERMISSION_FALLBACK_INSTRUCTION =
+  '让工具直接编写AppleScript申请日历/提醒权限的代码然后运行';
 
 describe('cliExecutor', () => {
   beforeEach(() => {
@@ -251,9 +253,9 @@ describe('cliExecutor', () => {
         return {} as ChildProcess;
       }) as unknown as typeof execFile);
 
-      await expect(executeCli(['--action', 'read'])).rejects.toThrow(
-        'Reminder permission denied.',
-      );
+      const promise = executeCli(['--action', 'read']);
+      await expect(promise).rejects.toThrow('Reminder permission denied.');
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
       expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         1,
@@ -287,9 +289,9 @@ describe('cliExecutor', () => {
         return {} as ChildProcess;
       }) as unknown as typeof execFile);
 
-      await expect(executeCli(['--action', 'read-events'])).rejects.toThrow(
-        'Calendar permission denied.',
-      );
+      const promise = executeCli(['--action', 'read-events']);
+      await expect(promise).rejects.toThrow('Calendar permission denied.');
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
 
       expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
@@ -299,6 +301,45 @@ describe('cliExecutor', () => {
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         2,
         'calendars',
+        true,
+      );
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+    });
+
+    it('treats write-only reminder access as a permission error', async () => {
+      const permissionError = JSON.stringify({
+        status: 'error',
+        message: 'Reminder permission is write-only, but read access is required.',
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        const error = Object.assign(new Error('Command failed'), {
+          stderr: '',
+        }) as ExecFileException;
+        cb?.(error, permissionError, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const promise = executeCli(['--action', 'read']);
+
+      await expect(promise).rejects.toThrow(
+        'Reminder permission is write-only, but read access is required.',
+      );
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'reminders',
+      );
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'reminders',
         true,
       );
       expect(mockExecFile).toHaveBeenCalledTimes(2);
@@ -527,9 +568,9 @@ describe('cliExecutor', () => {
         return {} as ChildProcess;
       }) as unknown as typeof execFile);
 
-      await expect(executeCli(['--action', 'read'])).rejects.toThrow(
-        'Reminder permission denied.',
-      );
+      const promise = executeCli(['--action', 'read']);
+      await expect(promise).rejects.toThrow('Reminder permission denied.');
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
 
       expect(mockExecFile).toHaveBeenCalledTimes(2);
       expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);

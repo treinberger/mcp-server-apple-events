@@ -2,7 +2,7 @@
 
 [![Twitter Follow](https://img.shields.io/twitter/follow/FradSer?style=social)](https://twitter.com/FradSer)
 
-English | [简体中文](README.zh-CN.md)
+English | Simplified Chinese (see README.zh-CN.md)
 
 A Model Context Protocol (MCP) server that provides native integration with Apple Reminders and Calendar on macOS. This server allows you to interact with Apple Reminders and Calendar Events through a standardized interface with comprehensive management capabilities.
 
@@ -41,7 +41,7 @@ A Model Context Protocol (MCP) server that provides native integration with Appl
 
 ## macOS Permission Requirements (Sonoma 14+ / Sequoia 15)
 
-Apple now separates Reminders and Calendar permissions into *write-only* and *full-access* scopes. The Swift bridge declares the following privacy keys so Claude can both read and write data when you approve access:
+Apple now separates Reminders and Calendar permissions into *write-only* and *full-access* scopes. The Swift bridge declares the following privacy keys so the tool can read and write data when you approve access:
 
 - `NSRemindersUsageDescription`
 - `NSRemindersFullAccessUsageDescription`
@@ -52,7 +52,9 @@ Apple now separates Reminders and Calendar permissions into *write-only* and *fu
 
 When the CLI detects a `notDetermined` authorization status it calls `requestFullAccessToReminders` / `requestFullAccessToEvents`, which in turn triggers macOS to show the correct prompt. If the OS ever loses track of permissions, rerun `./check-permissions.sh` to re-open the dialogs.
 
-If a Claude tool call still encounters a permission failure, the Node.js layer automatically runs a minimal AppleScript (`osascript -e 'tell application "Reminders" …'`) to surface the dialog and then retries the Swift CLI once.
+EventKit permissions are granted to the `EventKitCLI` binary (you will see that name in System Settings). AppleScript automation permission is granted to the host tool that runs the MCP server (for example, a terminal or an MCP client), because it is the automation sender.
+
+If a tool call still encounters a permission failure, the Node.js layer automatically runs a minimal AppleScript (`osascript -e 'tell application "Reminders" …'`) to surface the dialog and then retries the Swift CLI once. If that still fails, follow the instruction to have the tool generate and run AppleScript to request calendar/reminder permissions.
 
 **Verification command**
 

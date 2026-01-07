@@ -13,7 +13,7 @@ import type {
 import { validateInput } from '../../validation/schemas.js';
 
 /**
- * Extracts and validates arguments by removing action field and validating remaining properties
+ * Extracts and validates arguments by removing action and validating the rest
  */
 export const extractAndValidateArgs = <T>(
   args:
@@ -68,7 +68,7 @@ export const formatSuccessMessage = (
 };
 
 /**
- * Formats a delete success message with customizable formatting options
+ * Formats a delete success message
  */
 export const formatDeleteMessage = (
   itemType: string,

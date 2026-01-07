@@ -12,6 +12,11 @@ import {
   getEnvironmentBinaryConfig,
 } from './binaryValidator.js';
 import { FILE_SYSTEM } from './constants.js';
+import {
+  hasBeenPrompted,
+  type PermissionDomain,
+  triggerPermissionPrompt,
+} from './permissionPrompt.js';
 import { findProjectRoot } from './projectUtils.js';
 
 const execFilePromise = (
@@ -47,6 +52,86 @@ interface CliErrorResponse {
 type CliResponse<T> = CliSuccessResponse<T> | CliErrorResponse;
 
 /**
+ * Permission error patterns from the Swift CLI
+ */
+const PERMISSION_ERROR_PATTERNS: Record<PermissionDomain, RegExp[]> = {
+  reminders: [
+    /reminder permission denied/i,
+    /reminders access denied/i,
+    /not authorized.*reminders/i,
+    /reminder permission is write-only/i,
+  ],
+  calendars: [
+    /calendar permission denied/i,
+    /calendar access denied/i,
+    /not authorized.*calendar/i,
+    /calendar permission is write-only/i,
+  ],
+};
+
+/**
+ * Calendar-specific action names used in Swift CLI
+ */
+const CALENDAR_ACTIONS = new Set([
+  'read-events',
+  'read-calendars',
+  'create-event',
+  'update-event',
+  'delete-event',
+]);
+
+const PERMISSION_FALLBACK_INSTRUCTION =
+  'To resolve this, ask the tool to generate and run the AppleScript code to request calendar/reminder permissions.';
+
+/**
+ * Detects which permission domain an action requires
+ * @param args - CLI arguments array
+ * @returns The permission domain ('reminders' or 'calendars')
+ */
+function detectActionDomain(args: string[]): PermissionDomain {
+  const actionIndex = args.indexOf('--action');
+  if (actionIndex !== -1 && actionIndex + 1 < args.length) {
+    const action = args[actionIndex + 1];
+    return CALENDAR_ACTIONS.has(action) ? 'calendars' : 'reminders';
+  }
+  return 'reminders'; // Default to reminders if action not found
+}
+
+/**
+ * Detects if an error message indicates a permission issue
+ * @param message - Error message to check
+ * @returns The permission domain if detected, null otherwise
+ */
+function detectPermissionError(message: string): PermissionDomain | null {
+  for (const [domain, patterns] of Object.entries(PERMISSION_ERROR_PATTERNS)) {
+    if (patterns.some((pattern) => pattern.test(message))) {
+      return domain as PermissionDomain;
+    }
+  }
+  return null;
+}
+
+function appendPermissionFallbackInstruction(message: string): string {
+  if (message.includes(PERMISSION_FALLBACK_INSTRUCTION)) {
+    return message;
+  }
+  return `${message}\n\n${PERMISSION_FALLBACK_INSTRUCTION}`;
+}
+
+/**
+ * Custom error class for permission-related failures
+ */
+export class CliPermissionError extends Error {
+  constructor(
+    message: string,
+    public readonly domain: PermissionDomain,
+  ) {
+    super(message);
+    this.name = 'CliPermissionError';
+  }
+}
+
+/**
  * Calendar action strings used in Swift CLI (different from MCP tool action names)
  */
 
@@ -70,6 +155,13 @@ const parseCliOutput = <T>(output: string): T => {
   if (parsed.status === 'success') {
     return parsed.result;
   }
+
+  // Check for permission errors and throw specialized error
+  const permissionDomain = detectPermissionError(parsed.message);
+  if (permissionDomain) {
+    throw new CliPermissionError(parsed.message, permissionDomain);
+  }
+
   throw new Error(parsed.message);
 };
 
@@ -82,6 +174,10 @@ const runCli = async <T>(cliPath: string, args: string[]): Promise<T> => {
     }
     return parseCliOutput(normalized);
   } catch (error) {
+    // Preserve CliPermissionError for retry logic
+    if (error instanceof CliPermissionError) {
+      throw error;
+    }
     const execError = error as ExecFileException & {
       stdout?: string | Buffer;
     };
@@ -103,6 +199,8 @@ const runCli = async <T>(cliPath: string, args: string[]): Promise<T> => {
  * @description
  * - Locates binary using secure path validation
  * - Parses JSON response from Swift CLI
+ * - Proactively triggers permission prompts via AppleScript on first access
+ * - Automatically retries with AppleScript fallback on permission errors
  * @example
  * const result = await executeCli<Reminder[]>(['--action', 'read', '--showCompleted', 'true']);
  */
@@ -129,5 +227,34 @@ export async function executeCli<T>(args: string[]): Promise<T> {
     );
   }
 
-  return await runCli<T>(cliPath, args);
+  // Detect which permission domain this action requires
+  const domain = detectActionDomain(args);
+
+  // Proactively trigger AppleScript permission prompt on first access
+  // This ensures the permission dialog appears even in non-interactive contexts
+  // where the Swift binary's native EventKit permission request may be suppressed
+  if (!hasBeenPrompted(domain)) {
+    await triggerPermissionPrompt(domain);
+  }
+
+  try {
+    return await runCli<T>(cliPath, args);
+  } catch (error) {
+    // On permission error, trigger AppleScript prompt and retry once
+    if (error instanceof CliPermissionError) {
+      await triggerPermissionPrompt(error.domain, true);
+      try {
+        return await runCli<T>(cliPath, args);
+      } catch (retryError) {
+        if (retryError instanceof CliPermissionError) {
+          throw new CliPermissionError(
+            appendPermissionFallbackInstruction(retryError.message),
+            retryError.domain,
+          );
+        }
+        throw retryError;
+      }
+    }
+    throw error;
+  }
 }

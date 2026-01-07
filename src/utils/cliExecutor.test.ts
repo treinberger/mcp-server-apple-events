@@ -13,7 +13,11 @@ import {
   findSecureBinaryPath,
   getEnvironmentBinaryConfig,
 } from './binaryValidator.js';
-import { executeCli } from './cliExecutor.js';
+import { CliPermissionError, executeCli } from './cliExecutor.js';
+import {
+  hasBeenPrompted,
+  triggerPermissionPrompt,
+} from './permissionPrompt.js';
 import { findProjectRoot } from './projectUtils.js';
 
 type ExecFileCallback =
@@ -33,6 +37,11 @@ jest.mock('./binaryValidator.js', () => ({
   findSecureBinaryPath: jest.fn(),
   getEnvironmentBinaryConfig: jest.fn(),
 }));
+jest.mock('./permissionPrompt.js', () => ({
+  triggerPermissionPrompt: jest.fn().mockResolvedValue(undefined),
+  hasBeenPrompted: jest.fn().mockReturnValue(false),
+  resetPromptedDomains: jest.fn(),
+}));
 
 const mockExecFile = execFile as jest.MockedFunction<typeof execFile>;
 const mockFindProjectRoot = findProjectRoot as jest.MockedFunction<
@@ -45,6 +54,15 @@ const mockGetEnvironmentBinaryConfig =
   getEnvironmentBinaryConfig as jest.MockedFunction<
     typeof getEnvironmentBinaryConfig
   >;
+const mockTriggerPermissionPrompt =
+  triggerPermissionPrompt as jest.MockedFunction<
+    typeof triggerPermissionPrompt
+  >;
+const mockHasBeenPrompted = hasBeenPrompted as jest.MockedFunction<
+  typeof hasBeenPrompted
+>;
+const PERMISSION_FALLBACK_INSTRUCTION =
+  'To resolve this, ask the tool to generate and run the AppleScript code to request calendar/reminder permissions.';
 
 describe('cliExecutor', () => {
   beforeEach(() => {
@@ -54,6 +72,8 @@ describe('cliExecutor', () => {
     mockFindSecureBinaryPath.mockReturnValue({
       path: '/test/project/bin/EventKitCLI',
     });
+    // Default: simulate that permission has not been prompted yet
+    mockHasBeenPrompted.mockReturnValue(false);
   });
 
   const invokeCallback = (
@@ -85,6 +105,8 @@ describe('cliExecutor', () => {
       const result = await executeCli(['--action', 'read', '--id', '123']);
 
       expect(result).toEqual({ id: '123', title: 'Test reminder' });
+      // Proactive permission prompt should be called first
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith('reminders');
       expect(mockExecFile).toHaveBeenCalledWith(
         '/test/project/bin/EventKitCLI',
         ['--action', 'read', '--id', '123'],
@@ -211,7 +233,7 @@ describe('cliExecutor', () => {
       );
     });
 
-    it('throws permission error when reminder access is denied', async () => {
+    it('throws permission error when reminder access is denied after retry', async () => {
       const permissionError = JSON.stringify({
         status: 'error',
         message: 'Reminder permission denied.',
@@ -231,13 +253,23 @@ describe('cliExecutor', () => {
         return {} as ChildProcess;
       }) as unknown as typeof execFile);
 
-      await expect(executeCli(['--action', 'read'])).rejects.toThrow(
-        'Reminder permission denied.',
+      const promise = executeCli(['--action', 'read']);
+      await expect(promise).rejects.toThrow('Reminder permission denied.');
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'reminders',
       );
-      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'reminders',
+        true,
+      );
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
     });
 
-    it('throws permission error when calendar access is denied', async () => {
+    it('throws permission error when calendar access is denied after retry', async () => {
       const permissionError = JSON.stringify({
         status: 'error',
         message: 'Calendar permission denied.',
@@ -257,11 +289,61 @@ describe('cliExecutor', () => {
         return {} as ChildProcess;
       }) as unknown as typeof execFile);
 
-      await expect(executeCli(['--action', 'read-events'])).rejects.toThrow(
-        'Calendar permission denied.',
-      );
+      const promise = executeCli(['--action', 'read-events']);
+      await expect(promise).rejects.toThrow('Calendar permission denied.');
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
 
-      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'calendars',
+      );
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'calendars',
+        true,
+      );
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+    });
+
+    it('treats write-only reminder access as a permission error', async () => {
+      const permissionError = JSON.stringify({
+        status: 'error',
+        message:
+          'Reminder permission is write-only, but read access is required.',
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        const error = Object.assign(new Error('Command failed'), {
+          stderr: '',
+        }) as ExecFileException;
+        cb?.(error, permissionError, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const promise = executeCli(['--action', 'read']);
+
+      await expect(promise).rejects.toThrow(
+        'Reminder permission is write-only, but read access is required.',
+      );
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'reminders',
+      );
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'reminders',
+        true,
+      );
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
     });
 
     it('throws authorization error immediately', async () => {
@@ -382,6 +464,225 @@ describe('cliExecutor', () => {
 
       const result = await executeCli(['--action', 'read']);
       expect(result).toEqual({ value: 123 });
+    });
+
+    it('triggers permission prompt and retries on reminder permission error', async () => {
+      let callCount = 0;
+      const permissionError = JSON.stringify({
+        status: 'error',
+        message: 'Reminder permission denied.',
+      });
+      const successResponse = JSON.stringify({
+        status: 'success',
+        result: { reminders: [] },
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        callCount++;
+        if (callCount === 1) {
+          cb?.(null, permissionError, '');
+        } else {
+          cb?.(null, successResponse, '');
+        }
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const result = await executeCli(['--action', 'read']);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'reminders',
+      );
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'reminders',
+        true,
+      );
+      expect(result).toEqual({ reminders: [] });
+    });
+
+    it('triggers permission prompt and retries on calendar permission error', async () => {
+      let callCount = 0;
+      const permissionError = JSON.stringify({
+        status: 'error',
+        message: 'Calendar permission denied.',
+      });
+      const successResponse = JSON.stringify({
+        status: 'success',
+        result: { events: [] },
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        callCount++;
+        if (callCount === 1) {
+          cb?.(null, permissionError, '');
+        } else {
+          cb?.(null, successResponse, '');
+        }
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const result = await executeCli(['--action', 'read-events']);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'calendars',
+      );
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'calendars',
+        true,
+      );
+      expect(result).toEqual({ events: [] });
+    });
+
+    it('only retries once on permission error', async () => {
+      const permissionError = JSON.stringify({
+        status: 'error',
+        message: 'Reminder permission denied.',
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        cb?.(null, permissionError, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const promise = executeCli(['--action', 'read']);
+      await expect(promise).rejects.toThrow('Reminder permission denied.');
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'reminders',
+      );
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'reminders',
+        true,
+      );
+    });
+
+    it('does not trigger permission prompt for non-permission errors', async () => {
+      const genericError = JSON.stringify({
+        status: 'error',
+        message: 'Network error occurred.',
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        cb?.(null, genericError, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      await expect(executeCli(['--action', 'read'])).rejects.toThrow(
+        'Network error occurred.',
+      );
+
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(1);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith('reminders');
+    });
+
+    it('should skip proactive permission prompt when already prompted', async () => {
+      // Simulate that permission has already been prompted
+      mockHasBeenPrompted.mockReturnValue(true);
+
+      const mockStdout = JSON.stringify({
+        status: 'success',
+        result: { id: '123', title: 'Test reminder' },
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        cb?.(null, mockStdout, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const result = await executeCli(['--action', 'read', '--id', '123']);
+
+      expect(result).toEqual({ id: '123', title: 'Test reminder' });
+      expect(mockTriggerPermissionPrompt).not.toHaveBeenCalled();
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('should trigger proactive permission prompt for calendar actions', async () => {
+      const mockStdout = JSON.stringify({
+        status: 'success',
+        result: { calendars: [], events: [] },
+      });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        cb?.(null, mockStdout, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      await executeCli(['--action', 'read-events']);
+
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith('calendars');
+    });
+  });
+
+  describe('CliPermissionError', () => {
+    it('creates error with correct domain for reminders', () => {
+      const error = new CliPermissionError(
+        'Reminder permission denied.',
+        'reminders',
+      );
+
+      expect(error.name).toBe('CliPermissionError');
+      expect(error.message).toBe('Reminder permission denied.');
+      expect(error.domain).toBe('reminders');
+    });
+
+    it('creates error with correct domain for calendars', () => {
+      const error = new CliPermissionError(
+        'Calendar permission denied.',
+        'calendars',
+      );
+
+      expect(error.name).toBe('CliPermissionError');
+      expect(error.message).toBe('Calendar permission denied.');
+      expect(error.domain).toBe('calendars');
     });
   });
 });

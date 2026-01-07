@@ -27,6 +27,7 @@ import {
   handleUpdateReminder,
   handleUpdateReminderList,
 } from './handlers/index.js';
+
 const TOOL_ALIASES: Record<string, string> = TOOL_NAMES.ALIASES;
 
 function normalizeToolName(name: string): string {

@@ -4,9 +4,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A Model Context Protocol (MCP) server that provides native integration with Apple Reminders and Calendar on macOS. This server allows you to interact with Apple Reminders and Calendar Events through a standardized interface with comprehensive management capabilities.
-
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/fradser-mcp-server-apple-events-badge.png)](https://mseep.ai/app/fradser-mcp-server-apple-events)
+A Model Context Protocol (MCP) server that uses EventKit to operate Apple Calendar and Apple Reminders on macOS.
 
 ## Features
 
@@ -14,7 +12,7 @@ A Model Context Protocol (MCP) server that provides native integration with Appl
 - **List Management**: View all reminders and reminder lists with advanced filtering options
 - **Reminder Operations**: Full CRUD operations (Create, Read, Update, Delete) for reminders across lists
 - **Rich Content Support**: Complete support for titles, notes, due dates, URLs, and completion status
-- **Native macOS Integration**: Direct integration with Apple Reminders using EventKit framework
+- **Native macOS Integration**: Uses EventKit to operate Apple Calendar and Apple Reminders
 
 ### Advanced Features
 - **Smart Organization**: Automatic categorization and intelligent filtering by priority, due date, category, or completion status
@@ -27,7 +25,7 @@ A Model Context Protocol (MCP) server that provides native integration with Appl
 ### Technical Excellence
 - **Clean Architecture**: 4-layer architecture following Clean Architecture principles with dependency injection
 - **Type Safety**: Complete TypeScript coverage with Zod schema validation for runtime type checking
-- **High Performance**: Swift-compiled binaries for performance-critical Apple Reminders operations
+- **High Performance**: Swift-compiled binaries for performance-critical Apple Reminders and Calendar operations
 - **Robust Error Handling**: Consistent error responses with detailed diagnostic information
 - **Repository Pattern**: Data access abstraction with standardized CRUD operations
 - **Functional Programming**: Pure functions with immutable data structures where appropriate
@@ -41,7 +39,7 @@ A Model Context Protocol (MCP) server that provides native integration with Appl
 
 ## macOS Permission Requirements (Sonoma 14+ / Sequoia 15)
 
-Apple now separates Reminders and Calendar permissions into *write-only* and *full-access* scopes. The Swift bridge declares the following privacy keys so Claude can both read and write data when you approve access:
+Apple now separates Reminders and Calendar permissions into *write-only* and *full-access* scopes. The Swift bridge declares the following privacy keys so the tool can read and write data when you approve access:
 
 - `NSRemindersUsageDescription`
 - `NSRemindersFullAccessUsageDescription`
@@ -52,7 +50,9 @@ Apple now separates Reminders and Calendar permissions into *write-only* and *fu
 
 When the CLI detects a `notDetermined` authorization status it calls `requestFullAccessToReminders` / `requestFullAccessToEvents`, which in turn triggers macOS to show the correct prompt. If the OS ever loses track of permissions, rerun `./check-permissions.sh` to re-open the dialogs.
 
-If a Claude tool call still encounters a permission failure, the Node.js layer automatically runs a minimal AppleScript (`osascript -e 'tell application "Reminders" …'`) to surface the dialog and then retries the Swift CLI once.
+EventKit permissions are granted to the `EventKitCLI` binary (you will see that name in System Settings). AppleScript automation permission is granted to the host tool that runs the MCP server (for example, a terminal or an MCP client), because it is the automation sender.
+
+If a tool call still encounters a permission failure, the Node.js layer automatically runs a minimal AppleScript (`osascript -e 'tell application "Reminders" …'`) to surface the dialog and then retries the Swift CLI once. If that still fails, follow the instruction to have the tool generate and run AppleScript to request calendar/reminder permissions.
 
 **Verification command**
 

@@ -25,6 +25,11 @@ jest.mock('node:child_process');
 const mockExecFile = execFile as jest.MockedFunction<typeof execFile>;
 
 describe('permissionPrompt', () => {
+  const REMINDERS_COMMAND =
+    'osascript -e \'tell application "Reminders" to get the name of every list\'';
+  const CALENDARS_COMMAND =
+    'osascript -e \'tell application "Calendar" to get the name of every calendar\'';
+
   beforeEach(() => {
     jest.clearAllMocks();
     resetPromptedDomains();
@@ -41,7 +46,7 @@ describe('permissionPrompt', () => {
         return {} as ChildProcess;
       }) as unknown as typeof execFile);
 
-      await triggerPermissionPrompt('reminders');
+      const result = await triggerPermissionPrompt('reminders');
 
       expect(mockExecFile).toHaveBeenCalledWith(
         'osascript',
@@ -51,6 +56,11 @@ describe('permissionPrompt', () => {
         ],
         expect.any(Function),
       );
+      expect(result).toEqual({
+        ok: true,
+        domain: 'reminders',
+        command: REMINDERS_COMMAND,
+      });
     });
 
     it('triggers AppleScript for calendars permission', async () => {
@@ -63,7 +73,7 @@ describe('permissionPrompt', () => {
         return {} as ChildProcess;
       }) as unknown as typeof execFile);
 
-      await triggerPermissionPrompt('calendars');
+      const result = await triggerPermissionPrompt('calendars');
 
       expect(mockExecFile).toHaveBeenCalledWith(
         'osascript',
@@ -73,6 +83,11 @@ describe('permissionPrompt', () => {
         ],
         expect.any(Function),
       );
+      expect(result).toEqual({
+        ok: true,
+        domain: 'calendars',
+        command: CALENDARS_COMMAND,
+      });
     });
 
     it('skips duplicate prompts for the same domain in a session', async () => {
@@ -85,11 +100,13 @@ describe('permissionPrompt', () => {
         return {} as ChildProcess;
       }) as unknown as typeof execFile);
 
-      await triggerPermissionPrompt('reminders');
-      await triggerPermissionPrompt('reminders');
-      await triggerPermissionPrompt('reminders');
+      const firstResult = await triggerPermissionPrompt('reminders');
+      const secondResult = await triggerPermissionPrompt('reminders');
+      const thirdResult = await triggerPermissionPrompt('reminders');
 
       expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(firstResult).toEqual(secondResult);
+      expect(secondResult).toEqual(thirdResult);
     });
 
     it('allows prompts for different domains', async () => {
@@ -119,10 +136,13 @@ describe('permissionPrompt', () => {
         return {} as ChildProcess;
       }) as unknown as typeof execFile);
 
-      await triggerPermissionPrompt('reminders');
+      const result = await triggerPermissionPrompt('reminders');
 
       expect(hasBeenPrompted('reminders')).toBe(true);
       expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(false);
+      expect(result.command).toBe(REMINDERS_COMMAND);
+      expect(result.errorMessage).toContain('Permission denied');
 
       await triggerPermissionPrompt('reminders');
       expect(mockExecFile).toHaveBeenCalledTimes(1);
@@ -145,8 +165,13 @@ describe('permissionPrompt', () => {
       await triggerPermissionPrompt('reminders');
       expect(mockExecFile).toHaveBeenCalledTimes(1);
 
-      await triggerPermissionPrompt('reminders', true);
+      const result = await triggerPermissionPrompt('reminders', true);
       expect(mockExecFile).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({
+        ok: true,
+        domain: 'reminders',
+        command: REMINDERS_COMMAND,
+      });
     });
 
     it('prevents race condition with concurrent calls to the same domain', async () => {

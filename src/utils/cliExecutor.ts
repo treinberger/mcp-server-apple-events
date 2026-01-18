@@ -15,6 +15,7 @@ import { FILE_SYSTEM } from './constants.js';
 import {
   hasBeenPrompted,
   type PermissionDomain,
+  type PermissionPromptResult,
   triggerPermissionPrompt,
 } from './permissionPrompt.js';
 import { findProjectRoot } from './projectUtils.js';
@@ -80,8 +81,15 @@ const CALENDAR_ACTIONS = new Set([
   'delete-event',
 ]);
 
-const PERMISSION_FALLBACK_INSTRUCTION =
-  'To resolve this, ask the tool to generate and run the AppleScript code to request calendar/reminder permissions.';
+const PERMISSION_FALLBACK_PREFIX =
+  'If the permission prompt does not appear, run the following command from the same app that launches the server (for example Terminal or Claude Desktop) and approve the prompt:';
+
+const APPLESCRIPT_COMMANDS: Record<PermissionDomain, string> = {
+  reminders:
+    'osascript -e \'tell application "Reminders" to get the name of every list\'',
+  calendars:
+    'osascript -e \'tell application "Calendar" to get the name of every calendar\'',
+};
 
 /**
  * Detects which permission domain an action requires
@@ -111,11 +119,26 @@ function detectPermissionError(message: string): PermissionDomain | null {
   return null;
 }
 
-function appendPermissionFallbackInstruction(message: string): string {
-  if (message.includes(PERMISSION_FALLBACK_INSTRUCTION)) {
+function buildPermissionFallbackInstruction(
+  domain: PermissionDomain,
+  promptResult?: PermissionPromptResult,
+): string {
+  const lines = [PERMISSION_FALLBACK_PREFIX, APPLESCRIPT_COMMANDS[domain]];
+  if (promptResult?.errorMessage) {
+    lines.push(`AppleScript prompt error: ${promptResult.errorMessage}`);
+  }
+  return lines.join('\n');
+}
+
+function appendPermissionFallbackInstruction(
+  message: string,
+  domain: PermissionDomain,
+  promptResult?: PermissionPromptResult,
+): string {
+  if (message.includes(PERMISSION_FALLBACK_PREFIX)) {
     return message;
   }
-  return `${message}\n\n${PERMISSION_FALLBACK_INSTRUCTION}`;
+  return `${message}\n\n${buildPermissionFallbackInstruction(domain, promptResult)}`;
 }
 
 /**
@@ -229,12 +252,22 @@ export async function executeCli<T>(args: string[]): Promise<T> {
 
   // Detect which permission domain this action requires
   const domain = detectActionDomain(args);
+  const promptResults = new Map<PermissionDomain, PermissionPromptResult>();
+
+  const recordPromptResult = async (
+    promptDomain: PermissionDomain,
+    force = false,
+  ): Promise<PermissionPromptResult> => {
+    const result = await triggerPermissionPrompt(promptDomain, force);
+    promptResults.set(promptDomain, result);
+    return result;
+  };
 
   // Proactively trigger AppleScript permission prompt on first access
   // This ensures the permission dialog appears even in non-interactive contexts
   // where the Swift binary's native EventKit permission request may be suppressed
   if (!hasBeenPrompted(domain)) {
-    await triggerPermissionPrompt(domain);
+    await recordPromptResult(domain);
   }
 
   try {
@@ -242,13 +275,17 @@ export async function executeCli<T>(args: string[]): Promise<T> {
   } catch (error) {
     // On permission error, trigger AppleScript prompt and retry once
     if (error instanceof CliPermissionError) {
-      await triggerPermissionPrompt(error.domain, true);
+      const retryPromptResult = await recordPromptResult(error.domain, true);
       try {
         return await runCli<T>(cliPath, args);
       } catch (retryError) {
         if (retryError instanceof CliPermissionError) {
           throw new CliPermissionError(
-            appendPermissionFallbackInstruction(retryError.message),
+            appendPermissionFallbackInstruction(
+              retryError.message,
+              retryError.domain,
+              retryPromptResult,
+            ),
             retryError.domain,
           );
         }

@@ -52,7 +52,7 @@ When the CLI detects a `notDetermined` authorization status it calls `requestFul
 
 EventKit permissions are granted to the `EventKitCLI` binary (you will see that name in System Settings). AppleScript automation permission is granted to the host tool that runs the MCP server (for example, a terminal or an MCP client), because it is the automation sender.
 
-If a tool call still encounters a permission failure, the Node.js layer automatically runs a minimal AppleScript (`osascript -e 'tell application "Reminders" …'`) to surface the dialog and then retries the Swift CLI once. If that still fails, follow the instruction to have the tool generate and run AppleScript to request calendar/reminder permissions.
+If a tool call still encounters a permission failure, the Node.js layer automatically runs a minimal AppleScript (`osascript -e 'tell application "Reminders" …'`) to surface the dialog and then retries the Swift CLI once. If that still fails, the error message includes a domain-specific `osascript` command; run it from the same app that launches the server (for example Terminal or Claude Desktop) to force the prompt.
 
 **Verification command**
 

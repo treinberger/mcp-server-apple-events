@@ -20,6 +20,11 @@ import {
 } from './permissionPrompt.js';
 import { findProjectRoot } from './projectUtils.js';
 
+const REMINDERS_COMMAND =
+  'osascript -e \'tell application "Reminders" to get the name of every list\'';
+const CALENDARS_COMMAND =
+  'osascript -e \'tell application "Calendar" to get the name of every calendar\'';
+
 type ExecFileCallback =
   | ((
       error: ExecFileException | null,
@@ -38,7 +43,13 @@ jest.mock('./binaryValidator.js', () => ({
   getEnvironmentBinaryConfig: jest.fn(),
 }));
 jest.mock('./permissionPrompt.js', () => ({
-  triggerPermissionPrompt: jest.fn().mockResolvedValue(undefined),
+  triggerPermissionPrompt: jest.fn((domain: string) =>
+    Promise.resolve({
+      ok: true,
+      domain,
+      command: domain === 'calendars' ? CALENDARS_COMMAND : REMINDERS_COMMAND,
+    }),
+  ),
   hasBeenPrompted: jest.fn().mockReturnValue(false),
   resetPromptedDomains: jest.fn(),
 }));
@@ -61,8 +72,8 @@ const mockTriggerPermissionPrompt =
 const mockHasBeenPrompted = hasBeenPrompted as jest.MockedFunction<
   typeof hasBeenPrompted
 >;
-const PERMISSION_FALLBACK_INSTRUCTION =
-  'To resolve this, ask the tool to generate and run the AppleScript code to request calendar/reminder permissions.';
+const PERMISSION_FALLBACK_PREFIX =
+  'If the permission prompt does not appear, run the following command from the same app that launches the server';
 
 describe('cliExecutor', () => {
   beforeEach(() => {
@@ -106,7 +117,10 @@ describe('cliExecutor', () => {
 
       expect(result).toEqual({ id: '123', title: 'Test reminder' });
       // Proactive permission prompt should be called first
-      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith('reminders');
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith(
+        'reminders',
+        false,
+      );
       expect(mockExecFile).toHaveBeenCalledWith(
         '/test/project/bin/EventKitCLI',
         ['--action', 'read', '--id', '123'],
@@ -255,11 +269,13 @@ describe('cliExecutor', () => {
 
       const promise = executeCli(['--action', 'read']);
       await expect(promise).rejects.toThrow('Reminder permission denied.');
-      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_PREFIX);
+      await expect(promise).rejects.toThrow(REMINDERS_COMMAND);
       expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         1,
         'reminders',
+        false,
       );
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         2,
@@ -291,12 +307,14 @@ describe('cliExecutor', () => {
 
       const promise = executeCli(['--action', 'read-events']);
       await expect(promise).rejects.toThrow('Calendar permission denied.');
-      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_PREFIX);
+      await expect(promise).rejects.toThrow(CALENDARS_COMMAND);
 
       expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         1,
         'calendars',
+        false,
       );
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         2,
@@ -332,11 +350,13 @@ describe('cliExecutor', () => {
       await expect(promise).rejects.toThrow(
         'Reminder permission is write-only, but read access is required.',
       );
-      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_PREFIX);
+      await expect(promise).rejects.toThrow(REMINDERS_COMMAND);
       expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         1,
         'reminders',
+        false,
       );
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         2,
@@ -344,6 +364,45 @@ describe('cliExecutor', () => {
         true,
       );
       expect(mockExecFile).toHaveBeenCalledTimes(2);
+    });
+
+    it('includes AppleScript prompt error details when prompting fails', async () => {
+      const permissionError = JSON.stringify({
+        status: 'error',
+        message: 'Reminder permission denied.',
+      });
+
+      mockTriggerPermissionPrompt
+        .mockResolvedValueOnce({
+          ok: true,
+          domain: 'reminders',
+          command: REMINDERS_COMMAND,
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          domain: 'reminders',
+          command: REMINDERS_COMMAND,
+          errorMessage: 'Not authorized to send Apple events to Reminders.',
+        });
+
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        cb?.(null, permissionError, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const promise = executeCli(['--action', 'read']);
+
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_PREFIX);
+      await expect(promise).rejects.toThrow(REMINDERS_COMMAND);
+      await expect(promise).rejects.toThrow(
+        'AppleScript prompt error: Not authorized to send Apple events to Reminders.',
+      );
     });
 
     it('throws authorization error immediately', async () => {
@@ -500,6 +559,7 @@ describe('cliExecutor', () => {
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         1,
         'reminders',
+        false,
       );
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         2,
@@ -543,6 +603,7 @@ describe('cliExecutor', () => {
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         1,
         'calendars',
+        false,
       );
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         2,
@@ -571,13 +632,15 @@ describe('cliExecutor', () => {
 
       const promise = executeCli(['--action', 'read']);
       await expect(promise).rejects.toThrow('Reminder permission denied.');
-      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_INSTRUCTION);
+      await expect(promise).rejects.toThrow(PERMISSION_FALLBACK_PREFIX);
+      await expect(promise).rejects.toThrow(REMINDERS_COMMAND);
 
       expect(mockExecFile).toHaveBeenCalledTimes(2);
       expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         1,
         'reminders',
+        false,
       );
       expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
         2,
@@ -609,7 +672,10 @@ describe('cliExecutor', () => {
 
       expect(mockExecFile).toHaveBeenCalledTimes(1);
       expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(1);
-      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith('reminders');
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith(
+        'reminders',
+        false,
+      );
     });
 
     it('should skip proactive permission prompt when already prompted', async () => {
@@ -658,7 +724,10 @@ describe('cliExecutor', () => {
 
       await executeCli(['--action', 'read-events']);
 
-      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith('calendars');
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledWith(
+        'calendars',
+        false,
+      );
     });
   });
 

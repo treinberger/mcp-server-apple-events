@@ -52,7 +52,7 @@ Apple 已将提醒事项与日历权限拆分为「仅写入」与「完全访�
 
 EventKit 权限授予给 `EventKitCLI` 二进制（你会在系统设置中看到该名称）。AppleScript 自动化权限授予运行 MCP 服务器的宿主工具（例如终端或 MCP 客户端），因为它是自动化请求的发起方。
 
-若工具调用仍遇到权限错误，Node.js 层会自动执行一段最小化的 AppleScript（`osascript -e 'tell application "Reminders" …'`）以唤起系统弹窗，并重试 Swift CLI 一次。若仍失败，请按提示让工具生成并运行 AppleScript 申请日历/提醒权限。
+若工具调用仍遇到权限错误，Node.js 层会自动执行一段最小化的 AppleScript（`osascript -e 'tell application "Reminders" …'`）以唤起系统弹窗，并重试 Swift CLI 一次。若仍失败，错误信息会给出对应的 `osascript` 命令；请在启动服务器的同一宿主应用（例如终端或 Claude Desktop）中运行它来强制弹窗。
 
 **验证命令**
 

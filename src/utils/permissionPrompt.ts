@@ -3,12 +3,19 @@
  * Triggers macOS permission prompts via AppleScript fallbacks.
  */
 
+import type { ExecFileException } from 'node:child_process';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
 export type PermissionDomain = 'reminders' | 'calendars';
+export type PermissionPromptResult = {
+  ok: boolean;
+  domain: PermissionDomain;
+  command: string;
+  errorMessage?: string;
+};
 
 const TIMEOUT_SECONDS = 120;
 
@@ -17,7 +24,36 @@ const APPLESCRIPT_SNIPPETS: Record<PermissionDomain, string> = {
   calendars: `with timeout of ${TIMEOUT_SECONDS} seconds\ntell application "Calendar" to get the name of every calendar\nend timeout`,
 };
 
-const promptPromises = new Map<PermissionDomain, Promise<void>>();
+const APPLESCRIPT_COMMANDS: Record<PermissionDomain, string> = {
+  reminders:
+    'osascript -e \'tell application "Reminders" to get the name of every list\'',
+  calendars:
+    'osascript -e \'tell application "Calendar" to get the name of every calendar\'',
+};
+
+const promptPromises = new Map<PermissionDomain, Promise<PermissionPromptResult>>();
+
+const bufferToString = (data?: string | Buffer | null): string | null => {
+  if (typeof data === 'string') return data;
+  if (Buffer.isBuffer(data)) return data.toString('utf8');
+  return data == null ? null : String(data);
+};
+
+const normalizeAppleScriptError = (error: unknown): string => {
+  if (!error) return 'Unknown AppleScript error';
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) {
+    const execError = error as ExecFileException & {
+      stderr?: string | Buffer;
+    };
+    const stderr = bufferToString(execError.stderr);
+    if (stderr && stderr.trim()) {
+      return stderr.trim();
+    }
+    return error.message;
+  }
+  return String(error);
+};
 
 /**
  * Triggers AppleScript to surface macOS permission dialogs with promise-based memoization
@@ -25,7 +61,7 @@ const promptPromises = new Map<PermissionDomain, Promise<void>>();
 export async function triggerPermissionPrompt(
   domain: PermissionDomain,
   force = false,
-): Promise<void> {
+): Promise<PermissionPromptResult> {
   if (!force) {
     const existing = promptPromises.get(domain);
     if (existing) {
@@ -37,8 +73,18 @@ export async function triggerPermissionPrompt(
     const script = APPLESCRIPT_SNIPPETS[domain];
     try {
       await execFileAsync('osascript', ['-e', script]);
-    } catch {
-      // Ignore errors - the goal is to trigger the prompt
+      return {
+        ok: true,
+        domain,
+        command: APPLESCRIPT_COMMANDS[domain],
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        domain,
+        command: APPLESCRIPT_COMMANDS[domain],
+        errorMessage: normalizeAppleScriptError(error),
+      };
     }
   })();
 

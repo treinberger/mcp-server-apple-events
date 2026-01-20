@@ -5,6 +5,7 @@
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
+  type LocationTrigger,
   PRIORITY_LABELS,
   type RecurrenceRule,
   type RemindersToolArgs,
@@ -69,6 +70,15 @@ const formatRecurrence = (recurrence: RecurrenceRule): string => {
   return parts.join(' ');
 };
 
+/**
+ * Formats a location trigger for display
+ */
+const formatLocationTrigger = (location: LocationTrigger): string => {
+  const proximityText = location.proximity === 'enter' ? 'Arriving at' : 'Leaving';
+  const radiusText = location.radius ? ` (${location.radius}m radius)` : '';
+  return `${proximityText} "${location.title}"${radiusText}`;
+};
+
 const formatReminderMarkdown = (reminder: {
   title: string;
   isCompleted: boolean;
@@ -80,12 +90,14 @@ const formatReminderMarkdown = (reminder: {
   priority?: number;
   isFlagged?: boolean;
   recurrence?: RecurrenceRule;
+  locationTrigger?: LocationTrigger;
 }): string[] => {
   const lines: string[] = [];
   const checkbox = reminder.isCompleted ? '[x]' : '[ ]';
   const flagIcon = reminder.isFlagged ? ' 🚩' : '';
   const repeatIcon = reminder.recurrence ? ' 🔄' : '';
-  lines.push(`- ${checkbox} ${reminder.title}${flagIcon}${repeatIcon}`);
+  const locationIcon = reminder.locationTrigger ? ' 📍' : '';
+  lines.push(`- ${checkbox} ${reminder.title}${flagIcon}${repeatIcon}${locationIcon}`);
   if (reminder.list) lines.push(`  - List: ${reminder.list}`);
   if (reminder.id) lines.push(`  - ID: ${reminder.id}`);
   if (reminder.priority !== undefined && reminder.priority > 0) {
@@ -94,6 +106,9 @@ const formatReminderMarkdown = (reminder: {
   }
   if (reminder.recurrence) {
     lines.push(`  - Repeats: ${formatRecurrence(reminder.recurrence)}`);
+  }
+  if (reminder.locationTrigger) {
+    lines.push(`  - Location: ${formatLocationTrigger(reminder.locationTrigger)}`);
   }
   if (reminder.notes)
     lines.push(`  - Notes: ${formatMultilineNotes(reminder.notes)}`);
@@ -116,6 +131,7 @@ export const handleCreateReminder = async (
       priority: validatedArgs.priority,
       isFlagged: validatedArgs.flagged,
       recurrence: validatedArgs.recurrence,
+      locationTrigger: validatedArgs.locationTrigger,
     });
     return formatSuccessMessage(
       'created',
@@ -143,6 +159,8 @@ export const handleUpdateReminder = async (
       isFlagged: validatedArgs.flagged,
       recurrence: validatedArgs.recurrence,
       clearRecurrence: validatedArgs.clearRecurrence,
+      locationTrigger: validatedArgs.locationTrigger,
+      clearLocationTrigger: validatedArgs.clearLocationTrigger,
     });
     return formatSuccessMessage(
       'updated',
@@ -194,6 +212,7 @@ export const handleReadReminders = async (
       priority: validatedArgs.filterPriority,
       flagged: validatedArgs.filterFlagged,
       recurring: validatedArgs.filterRecurring,
+      locationBased: validatedArgs.filterLocationBased,
     });
 
     return formatListMarkdown(

@@ -164,6 +164,19 @@ const RecurrenceRuleSchema = z
   .optional();
 
 /**
+ * Location trigger schema for geofence-based reminders
+ */
+const LocationTriggerSchema = z
+  .object({
+    title: createSafeTextSchema(1, VALIDATION.MAX_TITLE_LENGTH, 'Location title'),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    radius: z.number().positive().default(100),
+    proximity: z.enum(['enter', 'leave']),
+  })
+  .optional();
+
+/**
  * Common field combinations for reusability
  */
 const BaseReminderFields = {
@@ -175,6 +188,7 @@ const BaseReminderFields = {
   priority: PriorityValueSchema,
   flagged: z.boolean().optional(),
   recurrence: RecurrenceRuleSchema,
+  locationTrigger: LocationTriggerSchema,
 };
 
 export const SafeIdSchema = z.string().min(1, 'ID cannot be empty');
@@ -193,6 +207,7 @@ export const ReadRemindersSchema = z.object({
   filterPriority: PriorityFilterEnum,
   filterFlagged: z.boolean().optional(),
   filterRecurring: z.boolean().optional(),
+  filterLocationBased: z.boolean().optional(),
 });
 
 export const UpdateReminderSchema = z.object({
@@ -207,6 +222,8 @@ export const UpdateReminderSchema = z.object({
   flagged: z.boolean().optional(),
   recurrence: RecurrenceRuleSchema,
   clearRecurrence: z.boolean().optional(),
+  locationTrigger: LocationTriggerSchema,
+  clearLocationTrigger: z.boolean().optional(),
 });
 
 export const DeleteReminderSchema = z.object({

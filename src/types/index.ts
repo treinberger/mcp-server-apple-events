@@ -38,6 +38,22 @@ export interface RecurrenceRule {
 }
 
 /**
+ * Location trigger proximity types
+ */
+export type LocationProximity = 'enter' | 'leave';
+
+/**
+ * Location trigger interface for geofence-based reminders
+ */
+export interface LocationTrigger {
+  title: string; // Location name/title
+  latitude: number;
+  longitude: number;
+  radius?: number; // Geofence radius in meters (default 100)
+  proximity: LocationProximity; // Trigger on arrival or departure
+}
+
+/**
  * Reminder item interface
  */
 export interface Reminder {
@@ -51,6 +67,7 @@ export interface Reminder {
   priority: number; // 0=none, 1=high, 5=medium, 9=low
   isFlagged: boolean;
   recurrence?: RecurrenceRule;
+  locationTrigger?: LocationTrigger;
 }
 
 /**
@@ -160,6 +177,7 @@ export interface RemindersToolArgs extends BaseToolArgs {
   filterPriority?: 'high' | 'medium' | 'low' | 'none';
   filterFlagged?: boolean;
   filterRecurring?: boolean;
+  filterLocationBased?: boolean;
   // Single item parameters
   title?: string;
   newTitle?: string;
@@ -172,6 +190,9 @@ export interface RemindersToolArgs extends BaseToolArgs {
   // Recurrence parameters
   recurrence?: RecurrenceRule;
   clearRecurrence?: boolean;
+  // Location trigger parameters
+  locationTrigger?: LocationTrigger;
+  clearLocationTrigger?: boolean;
   // Target list for create/update operations
   targetList?: string;
 }

@@ -178,6 +178,48 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
           description:
             'Set to true to remove recurrence from an existing reminder (for update).',
         },
+        filterLocationBased: {
+          type: 'boolean',
+          description: 'Filter to only show location-based reminders when true.',
+        },
+        // Location trigger properties for create/update
+        locationTrigger: {
+          type: 'object',
+          description:
+            'Location trigger for geofence-based reminders. Reminder will fire when entering or leaving the specified location.',
+          properties: {
+            title: {
+              type: 'string',
+              description: 'Location name/title (e.g., "Home", "Office", "Grocery Store").',
+            },
+            latitude: {
+              type: 'number',
+              description: 'Latitude coordinate of the location.',
+            },
+            longitude: {
+              type: 'number',
+              description: 'Longitude coordinate of the location.',
+            },
+            radius: {
+              type: 'number',
+              description:
+                'Geofence radius in meters (default 100). Determines how close you need to be to trigger.',
+              default: 100,
+            },
+            proximity: {
+              type: 'string',
+              enum: ['enter', 'leave'],
+              description:
+                'When to trigger: "enter" fires when arriving, "leave" fires when departing.',
+            },
+          },
+          required: ['title', 'latitude', 'longitude', 'proximity'],
+        },
+        clearLocationTrigger: {
+          type: 'boolean',
+          description:
+            'Set to true to remove location trigger from an existing reminder (for update).',
+        },
       },
       required: ['action'],
       dependentSchemas: {

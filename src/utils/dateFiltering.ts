@@ -104,6 +104,7 @@ export interface ReminderFilters {
   priority?: PriorityFilter;
   flagged?: boolean;
   recurring?: boolean;
+  locationBased?: boolean;
 }
 
 /**
@@ -166,6 +167,13 @@ export function applyReminderFilters(
   if (filters.recurring !== undefined && filters.recurring) {
     filteredReminders = filteredReminders.filter(
       (reminder) => reminder.recurrence !== undefined,
+    );
+  }
+
+  // Filter by location-based status
+  if (filters.locationBased !== undefined && filters.locationBased) {
+    filteredReminders = filteredReminders.filter(
+      (reminder) => reminder.locationTrigger !== undefined,
     );
   }
 

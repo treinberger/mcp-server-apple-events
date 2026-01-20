@@ -17,6 +17,17 @@ export interface RecurrenceRuleJSON {
 }
 
 /**
+ * Location trigger JSON interface matching EventKitCLI output
+ */
+export interface LocationTriggerJSON {
+  title: string; // Location name/title
+  latitude: number;
+  longitude: number;
+  radius: number; // Geofence radius in meters
+  proximity: 'enter' | 'leave' | 'none';
+}
+
+/**
  * JSON interfaces matching the output from EventKitCLI
  */
 
@@ -31,6 +42,7 @@ export interface ReminderJSON {
   priority: number;
   isFlagged: boolean;
   recurrence: RecurrenceRuleJSON | null;
+  locationTrigger: LocationTriggerJSON | null;
 }
 
 export interface ListJSON {
@@ -82,6 +94,7 @@ export interface CreateReminderData {
   priority?: number;
   isFlagged?: boolean;
   recurrence?: RecurrenceRuleJSON;
+  locationTrigger?: LocationTriggerJSON;
 }
 
 export interface UpdateReminderData {
@@ -96,6 +109,8 @@ export interface UpdateReminderData {
   isFlagged?: boolean;
   recurrence?: RecurrenceRuleJSON;
   clearRecurrence?: boolean;
+  locationTrigger?: LocationTriggerJSON;
+  clearLocationTrigger?: boolean;
 }
 
 export interface CreateEventData {

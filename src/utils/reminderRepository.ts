@@ -48,6 +48,17 @@ class ReminderRepository {
       };
     }
 
+    // Map location trigger from JSON
+    if (reminder.locationTrigger) {
+      normalizedReminder.locationTrigger = {
+        title: reminder.locationTrigger.title,
+        latitude: reminder.locationTrigger.latitude,
+        longitude: reminder.locationTrigger.longitude,
+        radius: reminder.locationTrigger.radius,
+        proximity: reminder.locationTrigger.proximity === 'leave' ? 'leave' : 'enter',
+      };
+    }
+
     return normalizedReminder;
   }
 
@@ -97,6 +108,9 @@ class ReminderRepository {
     if (data.recurrence) {
       args.push('--recurrence', JSON.stringify(data.recurrence));
     }
+    if (data.locationTrigger) {
+      args.push('--locationTrigger', JSON.stringify(data.locationTrigger));
+    }
 
     return executeCli<ReminderJSON>(args);
   }
@@ -117,6 +131,10 @@ class ReminderRepository {
       args.push('--recurrence', JSON.stringify(data.recurrence));
     }
     addOptionalBooleanArg(args, '--clearRecurrence', data.clearRecurrence);
+    if (data.locationTrigger) {
+      args.push('--locationTrigger', JSON.stringify(data.locationTrigger));
+    }
+    addOptionalBooleanArg(args, '--clearLocationTrigger', data.clearLocationTrigger);
 
     return executeCli<ReminderJSON>(args);
   }

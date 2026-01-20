@@ -54,6 +54,24 @@ export interface LocationTrigger {
 }
 
 /**
+ * Subtask interface for checklist items within reminders
+ */
+export interface Subtask {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+}
+
+/**
+ * Subtask progress info
+ */
+export interface SubtaskProgress {
+  completed: number;
+  total: number;
+  percentage: number;
+}
+
+/**
  * Reminder item interface
  */
 export interface Reminder {
@@ -69,6 +87,8 @@ export interface Reminder {
   recurrence?: RecurrenceRule;
   locationTrigger?: LocationTrigger;
   tags?: string[]; // Extracted from notes using [#tag] format
+  subtasks?: Subtask[]; // Extracted from notes using ---SUBTASKS--- format
+  subtaskProgress?: SubtaskProgress; // Computed progress info
 }
 
 /**
@@ -199,8 +219,33 @@ export interface RemindersToolArgs extends BaseToolArgs {
   tags?: string[]; // Tags to add to the reminder
   addTags?: string[]; // Tags to add (for update)
   removeTags?: string[]; // Tags to remove (for update)
+  // Subtask parameters
+  subtasks?: string[]; // Subtask titles (for create - creates initial subtasks)
   // Target list for create/update operations
   targetList?: string;
+}
+
+/**
+ * Subtask action type
+ */
+export type SubtaskAction =
+  | 'read'
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'toggle'
+  | 'reorder';
+
+/**
+ * Tool arguments for subtask operations
+ */
+export interface SubtasksToolArgs extends BaseToolArgs {
+  action: SubtaskAction;
+  reminderId: string; // Parent reminder ID (required)
+  subtaskId?: string; // Subtask ID (for update, delete, toggle)
+  title?: string; // Subtask title (for create, update)
+  completed?: boolean; // Completion status (for update)
+  order?: string[]; // Array of subtask IDs in desired order (for reorder)
 }
 
 export interface ListsToolArgs extends BaseToolArgs {

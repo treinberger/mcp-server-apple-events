@@ -9,6 +9,7 @@ import type {
   CalendarToolArgs,
   ListsToolArgs,
   RemindersToolArgs,
+  SubtasksToolArgs,
 } from '../types/index.js';
 import { MESSAGES, TOOLS as TOOL_NAMES } from '../utils/constants.js';
 import { TOOLS } from './definitions.js';
@@ -16,16 +17,22 @@ import {
   handleCreateCalendarEvent,
   handleCreateReminder,
   handleCreateReminderList,
+  handleCreateSubtask,
   handleDeleteCalendarEvent,
   handleDeleteReminder,
   handleDeleteReminderList,
+  handleDeleteSubtask,
   handleReadCalendarEvents,
   handleReadCalendars,
   handleReadReminderLists,
   handleReadReminders,
+  handleReadSubtasks,
+  handleReorderSubtasks,
+  handleToggleSubtask,
   handleUpdateCalendarEvent,
   handleUpdateReminder,
   handleUpdateReminderList,
+  handleUpdateSubtask,
 } from './handlers/index.js';
 
 const TOOL_ALIASES: Record<string, string> = TOOL_NAMES.ALIASES;
@@ -37,6 +44,7 @@ function normalizeToolName(name: string): string {
 type ToolArgs =
   | RemindersToolArgs
   | ListsToolArgs
+  | SubtasksToolArgs
   | CalendarToolArgs
   | CalendarsToolArgs;
 
@@ -46,7 +54,11 @@ type ActionHandler<TArgs extends { action: string }> = (
   args: TArgs,
 ) => Promise<CallToolResult>;
 
-type RoutedToolName = 'reminders_tasks' | 'reminders_lists' | 'calendar_events';
+type RoutedToolName =
+  | 'reminders_tasks'
+  | 'reminders_lists'
+  | 'reminders_subtasks'
+  | 'calendar_events';
 type ToolName = RoutedToolName | 'calendar_calendars';
 
 /**
@@ -92,6 +104,17 @@ const TOOL_ROUTER_MAP = {
       create: (listArgs) => handleCreateReminderList(listArgs),
       update: (listArgs) => handleUpdateReminderList(listArgs),
       delete: (listArgs) => handleDeleteReminderList(listArgs),
+    },
+  ),
+  [TOOL_NAMES.REMINDERS_SUBTASKS]: createActionRouter<SubtasksToolArgs>(
+    TOOL_NAMES.REMINDERS_SUBTASKS,
+    {
+      read: (subtaskArgs) => handleReadSubtasks(subtaskArgs),
+      create: (subtaskArgs) => handleCreateSubtask(subtaskArgs),
+      update: (subtaskArgs) => handleUpdateSubtask(subtaskArgs),
+      delete: (subtaskArgs) => handleDeleteSubtask(subtaskArgs),
+      toggle: (subtaskArgs) => handleToggleSubtask(subtaskArgs),
+      reorder: (subtaskArgs) => handleReorderSubtasks(subtaskArgs),
     },
   ),
   [TOOL_NAMES.CALENDAR_EVENTS]: createActionRouter<CalendarToolArgs>(

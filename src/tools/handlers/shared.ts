@@ -9,6 +9,7 @@ import type {
   CalendarToolArgs,
   ListsToolArgs,
   RemindersToolArgs,
+  SubtasksToolArgs,
 } from '../../types/index.js';
 import { validateInput } from '../../validation/schemas.js';
 
@@ -19,6 +20,7 @@ export const extractAndValidateArgs = <T>(
   args:
     | RemindersToolArgs
     | ListsToolArgs
+    | SubtasksToolArgs
     | CalendarToolArgs
     | CalendarsToolArgs
     | undefined,

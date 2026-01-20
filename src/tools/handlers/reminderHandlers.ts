@@ -14,6 +14,12 @@ import { handleAsyncOperation } from '../../utils/errorHandling.js';
 import { formatMultilineNotes } from '../../utils/helpers.js';
 import { reminderRepository } from '../../utils/reminderRepository.js';
 import {
+  combineSubtasksAndNotes,
+  createSubtasksFromTitles,
+  type Subtask,
+  stripSubtasks,
+} from '../../utils/subtaskUtils.js';
+import {
   addTagsToNotes,
   combineTagsAndNotes,
   removeTagsFromNotes,
@@ -98,6 +104,8 @@ const formatReminderMarkdown = (reminder: {
   recurrence?: RecurrenceRule;
   locationTrigger?: LocationTrigger;
   tags?: string[];
+  subtasks?: Subtask[];
+  subtaskProgress?: { completed: number; total: number; percentage: number };
 }): string[] => {
   const lines: string[] = [];
   const checkbox = reminder.isCompleted ? '[x]' : '[ ]';
@@ -105,7 +113,8 @@ const formatReminderMarkdown = (reminder: {
   const repeatIcon = reminder.recurrence ? ' 🔄' : '';
   const locationIcon = reminder.locationTrigger ? ' 📍' : '';
   const tagIcon = reminder.tags && reminder.tags.length > 0 ? ' 🏷️' : '';
-  lines.push(`- ${checkbox} ${reminder.title}${flagIcon}${repeatIcon}${locationIcon}${tagIcon}`);
+  const subtaskIcon = reminder.subtasks && reminder.subtasks.length > 0 ? ' 📋' : '';
+  lines.push(`- ${checkbox} ${reminder.title}${flagIcon}${repeatIcon}${locationIcon}${tagIcon}${subtaskIcon}`);
   if (reminder.list) lines.push(`  - List: ${reminder.list}`);
   if (reminder.id) lines.push(`  - ID: ${reminder.id}`);
   if (reminder.priority !== undefined && reminder.priority > 0) {
@@ -121,8 +130,20 @@ const formatReminderMarkdown = (reminder: {
   if (reminder.locationTrigger) {
     lines.push(`  - Location: ${formatLocationTrigger(reminder.locationTrigger)}`);
   }
-  // Show notes without tag markers
-  const cleanNotes = stripTags(reminder.notes);
+  // Show subtasks with progress
+  if (reminder.subtasks && reminder.subtasks.length > 0) {
+    const progress = reminder.subtaskProgress;
+    const progressText = progress
+      ? ` (${progress.completed}/${progress.total})`
+      : '';
+    lines.push(`  - Subtasks${progressText}:`);
+    for (const subtask of reminder.subtasks) {
+      const subtaskCheckbox = subtask.isCompleted ? '[x]' : '[ ]';
+      lines.push(`    - ${subtaskCheckbox} ${subtask.title}`);
+    }
+  }
+  // Show notes without tag/subtask markers
+  const cleanNotes = stripSubtasks(stripTags(reminder.notes));
   if (cleanNotes) {
     lines.push(`  - Notes: ${formatMultilineNotes(cleanNotes)}`);
   }
@@ -138,13 +159,19 @@ export const handleCreateReminder = async (
     const validatedArgs = extractAndValidateArgs(args, CreateReminderSchema);
 
     // Combine tags with notes if tags are provided
-    const notesWithTags = validatedArgs.tags
+    let notesWithMetadata = validatedArgs.tags
       ? combineTagsAndNotes(validatedArgs.tags, validatedArgs.note)
       : validatedArgs.note;
 
+    // Combine subtasks with notes if subtasks are provided
+    if (args.subtasks && args.subtasks.length > 0) {
+      const subtasks = createSubtasksFromTitles(args.subtasks);
+      notesWithMetadata = combineSubtasksAndNotes(subtasks, notesWithMetadata);
+    }
+
     const reminder = await reminderRepository.createReminder({
       title: validatedArgs.title,
-      notes: notesWithTags,
+      notes: notesWithMetadata,
       url: validatedArgs.url,
       list: validatedArgs.targetList,
       dueDate: validatedArgs.dueDate,

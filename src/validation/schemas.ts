@@ -378,3 +378,52 @@ export const validateInput = <T>(schema: z.ZodSchema<T>, input: unknown): T => {
     throw new ValidationError('Input validation failed: Unknown error');
   }
 };
+
+/**
+ * Subtask-related schemas
+ */
+const SubtaskIdSchema = z
+  .string()
+  .min(1, 'Subtask ID is required')
+  .regex(/^[a-f0-9]+$/, 'Subtask ID must be a valid hex string');
+
+const SubtaskTitleSchema = createSafeTextSchema(
+  1,
+  VALIDATION.MAX_TITLE_LENGTH,
+  'Subtask title',
+);
+
+const SubtaskOrderSchema = z
+  .array(SubtaskIdSchema)
+  .min(1, 'Order array cannot be empty');
+
+export const ReadSubtasksSchema = z.object({
+  reminderId: SafeIdSchema,
+});
+
+export const CreateSubtaskSchema = z.object({
+  reminderId: SafeIdSchema,
+  title: SubtaskTitleSchema,
+});
+
+export const UpdateSubtaskSchema = z.object({
+  reminderId: SafeIdSchema,
+  subtaskId: SubtaskIdSchema,
+  title: SubtaskTitleSchema.optional(),
+  completed: z.boolean().optional(),
+});
+
+export const DeleteSubtaskSchema = z.object({
+  reminderId: SafeIdSchema,
+  subtaskId: SubtaskIdSchema,
+});
+
+export const ToggleSubtaskSchema = z.object({
+  reminderId: SafeIdSchema,
+  subtaskId: SubtaskIdSchema,
+});
+
+export const ReorderSubtasksSchema = z.object({
+  reminderId: SafeIdSchema,
+  order: SubtaskOrderSchema,
+});

@@ -23,3 +23,12 @@ export {
   handleReadReminders,
   handleUpdateReminder,
 } from './reminderHandlers.js';
+
+export {
+  handleCreateSubtask,
+  handleDeleteSubtask,
+  handleReadSubtasks,
+  handleReorderSubtasks,
+  handleToggleSubtask,
+  handleUpdateSubtask,
+} from './subtaskHandlers.js';

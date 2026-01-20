@@ -19,6 +19,10 @@ import {
   addOptionalBooleanArg,
   nullToUndefined,
 } from './helpers.js';
+import {
+  getSubtaskProgress,
+  parseSubtasks,
+} from './subtaskUtils.js';
 import { extractTags } from './tagUtils.js';
 
 class ReminderRepository {
@@ -64,6 +68,13 @@ class ReminderRepository {
     const tags = extractTags(reminder.notes);
     if (tags.length > 0) {
       normalizedReminder.tags = tags;
+    }
+
+    // Extract subtasks from notes
+    const subtasks = parseSubtasks(reminder.notes);
+    if (subtasks.length > 0) {
+      normalizedReminder.subtasks = subtasks;
+      normalizedReminder.subtaskProgress = getSubtaskProgress(subtasks);
     }
 
     return normalizedReminder;

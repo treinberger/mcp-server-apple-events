@@ -246,6 +246,13 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
           description:
             'Tags to remove from the reminder (for update). Example: ["urgent"]',
         },
+        // Subtask properties for create
+        subtasks: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Initial subtasks to create with the reminder (for create action). Provide an array of subtask titles. Example: ["Buy milk", "Get eggs", "Pick up bread"]',
+        },
       },
       required: ['action'],
       dependentSchemas: {
@@ -401,6 +408,69 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
       dependentSchemas: {
         action: {
           oneOf: [{ properties: { action: { const: 'read' } } }],
+        },
+      },
+    },
+  },
+  {
+    name: 'reminders_subtasks',
+    description:
+      'Manages subtasks/checklists within reminders. Subtasks are stored in the notes field and visible in the native Reminders app. Use this to create checklist items for a reminder.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['read', 'create', 'update', 'delete', 'toggle', 'reorder'],
+          description:
+            'The operation to perform: read (list subtasks), create (add new), update (modify), delete (remove), toggle (flip completion), reorder (change order).',
+        },
+        reminderId: {
+          type: 'string',
+          description:
+            'The unique identifier of the parent reminder (REQUIRED for all operations).',
+        },
+        subtaskId: {
+          type: 'string',
+          description:
+            'The unique identifier of the subtask (REQUIRED for update, delete, toggle).',
+        },
+        title: {
+          type: 'string',
+          description:
+            'The title of the subtask (REQUIRED for create, optional for update).',
+        },
+        completed: {
+          type: 'boolean',
+          description: 'The completion status of the subtask (for update).',
+        },
+        order: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Array of subtask IDs in desired order (REQUIRED for reorder). Must include all subtask IDs.',
+        },
+      },
+      required: ['action', 'reminderId'],
+      dependentSchemas: {
+        action: {
+          oneOf: [
+            { properties: { action: { const: 'read' } } },
+            { properties: { action: { const: 'create' } }, required: ['title'] },
+            {
+              properties: { action: { const: 'update' } },
+              required: ['subtaskId'],
+            },
+            {
+              properties: { action: { const: 'delete' } },
+              required: ['subtaskId'],
+            },
+            {
+              properties: { action: { const: 'toggle' } },
+              required: ['subtaskId'],
+            },
+            { properties: { action: { const: 'reorder' } }, required: ['order'] },
+          ],
         },
       },
     },

@@ -38,6 +38,8 @@ export const TOOLS = {
   REMINDERS_TASKS: 'reminders_tasks',
   /** Reminder lists management tool */
   REMINDERS_LISTS: 'reminders_lists',
+  /** Reminder subtasks management tool */
+  REMINDERS_SUBTASKS: 'reminders_subtasks',
   /** Calendar events management tool */
   CALENDAR_EVENTS: 'calendar_events',
   /** Calendar collections management tool */
@@ -47,6 +49,7 @@ export const TOOLS = {
   ALIASES: {
     'reminders.tasks': 'reminders_tasks',
     'reminders.lists': 'reminders_lists',
+    'reminders.subtasks': 'reminders_subtasks',
     'calendar.events': 'calendar_events',
     'calendar.calendars': 'calendar_calendars',
   } as const,

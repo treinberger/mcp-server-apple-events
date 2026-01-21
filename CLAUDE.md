@@ -27,7 +27,7 @@ This is an MCP (Model Context Protocol) server providing native macOS integratio
 
 ### Layer Structure
 
-```
+```text
 src/
 ├── index.ts              # Entry point: loads config, starts server
 ├── server/
@@ -87,7 +87,12 @@ The `bin/EventKitCLI` binary handles all native macOS EventKit operations. TypeS
 
 ```typescript
 // CLI returns: { "status": "success", "result": {...} } or { "status": "error", "message": "..." }
-const result = await executeCli<Reminder[]>(['--action', 'read', '--showCompleted', 'true']);
+const result = await executeCli<Reminder[]>([
+  "--action",
+  "read",
+  "--showCompleted",
+  "true",
+]);
 ```
 
 ## Key Patterns
@@ -107,12 +112,13 @@ Use `handleAsyncOperation()` wrapper from `errorHandling.ts` for consistent erro
 ```typescript
 return handleAsyncOperation(async () => {
   // operation logic
-}, 'operation description');
+}, "operation description");
 ```
 
 ### Tool Naming
 
 Tools support both underscore and dot notation:
+
 - `reminders_tasks` / `reminders.tasks`
 - `reminders_lists` / `reminders.lists`
 - `calendar_events` / `calendar.events`

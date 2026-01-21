@@ -6,19 +6,22 @@ This document outlines a phased approach to adding **Priority Support**, **Subta
 
 ### API Capability Matrix
 
-| Feature | Native EventKit Support | Implementation Approach |
-|---------|------------------------|------------------------|
-| **Priority** | ✅ Full support via `EKReminder.priority` | Direct API integration |
-| **Subtasks** | ❌ Not exposed in public API | Notes-based structured storage |
-| **Tags** | ❌ Not exposed in public API | Notes-based structured storage |
+| Feature      | Native EventKit Support                   | Implementation Approach        |
+| ------------ | ----------------------------------------- | ------------------------------ |
+| **Priority** | ✅ Full support via `EKReminder.priority` | Direct API integration         |
+| **Subtasks** | ❌ Not exposed in public API              | Notes-based structured storage |
+| **Tags**     | ❌ Not exposed in public API              | Notes-based structured storage |
 
 ---
 
 ## Phase 1: Priority Support (Native API)
+
 **Estimated Effort: 2-3 days**
 
 ### Overview
+
 Apple's EventKit provides native priority support through the `EKReminderPriority` enum with values:
+
 - `none` (0) - No priority
 - `high` (1) - High priority
 - `medium` (5) - Medium priority
@@ -92,10 +95,14 @@ filterPriority: {
 ```typescript
 export const reminderCreateSchema = z.object({
   // ... existing fields ...
-  priority: z.number().int().refine(
-    val => [0, 1, 5, 9].includes(val),
-    'Priority must be 0, 1, 5, or 9'
-  ).optional()
+  priority: z
+    .number()
+    .int()
+    .refine(
+      (val) => [0, 1, 5, 9].includes(val),
+      "Priority must be 0, 1, 5, or 9",
+    )
+    .optional(),
 });
 ```
 
@@ -108,10 +115,13 @@ export const reminderCreateSchema = z.object({
 ---
 
 ## Phase 2: Subtasks/Checklists (Notes-Based Storage)
+
 **Estimated Effort: 4-5 days**
 
 ### Overview
+
 Since Apple's EventKit does not expose subtasks to third-party developers, we implement a structured storage format within the notes field that:
+
 - Preserves human readability in native Reminders app
 - Allows programmatic parsing and manipulation
 - Maintains backward compatibility with existing reminders
@@ -137,7 +147,7 @@ URLs:
 
 ```typescript
 export interface Subtask {
-  id: string;           // Generated UUID
+  id: string; // Generated UUID
   title: string;
   isCompleted: boolean;
   order: number;
@@ -152,9 +162,19 @@ export interface ReminderWithSubtasks extends Reminder {
 
 ```typescript
 export function parseSubtasks(notes: string | null): Subtask[];
-export function serializeSubtasks(subtasks: Subtask[], existingNotes: string | null): string;
-export function addSubtask(notes: string | null, subtask: Omit<Subtask, 'id'>): string;
-export function updateSubtask(notes: string | null, subtaskId: string, updates: Partial<Subtask>): string;
+export function serializeSubtasks(
+  subtasks: Subtask[],
+  existingNotes: string | null,
+): string;
+export function addSubtask(
+  notes: string | null,
+  subtask: Omit<Subtask, "id">,
+): string;
+export function updateSubtask(
+  notes: string | null,
+  subtaskId: string,
+  updates: Partial<Subtask>,
+): string;
 export function removeSubtask(notes: string | null, subtaskId: string): string;
 export function toggleSubtask(notes: string | null, subtaskId: string): string;
 ```
@@ -207,14 +227,22 @@ Only change needed: ensure notes field properly preserved during updates.
 #### 2.5 Handler Implementation (`src/tools/handlers/subtaskHandlers.ts`)
 
 ```typescript
-export async function handleSubtaskAction(args: SubtaskArgs): Promise<CallToolResult> {
+export async function handleSubtaskAction(
+  args: SubtaskArgs,
+): Promise<CallToolResult> {
   switch (args.action) {
-    case 'read': return handleReadSubtasks(args.reminderId);
-    case 'create': return handleCreateSubtask(args.reminderId, args.title!);
-    case 'update': return handleUpdateSubtask(args.reminderId, args.subtaskId!, args);
-    case 'delete': return handleDeleteSubtask(args.reminderId, args.subtaskId!);
-    case 'toggle': return handleToggleSubtask(args.reminderId, args.subtaskId!);
-    case 'reorder': return handleReorderSubtasks(args.reminderId, args.order!);
+    case "read":
+      return handleReadSubtasks(args.reminderId);
+    case "create":
+      return handleCreateSubtask(args.reminderId, args.title!);
+    case "update":
+      return handleUpdateSubtask(args.reminderId, args.subtaskId!, args);
+    case "delete":
+      return handleDeleteSubtask(args.reminderId, args.subtaskId!);
+    case "toggle":
+      return handleToggleSubtask(args.reminderId, args.subtaskId!);
+    case "reorder":
+      return handleReorderSubtasks(args.reminderId, args.order!);
   }
 }
 ```
@@ -242,9 +270,11 @@ Also support creating reminder with subtasks in one call:
 ---
 
 ## Phase 3: Tags/Labels (Notes-Based Storage)
+
 **Estimated Effort: 3-4 days**
 
 ### Overview
+
 Tags provide cross-list categorization. Since EventKit doesn't expose Apple's native tags, we implement a notes-based tagging system similar to subtasks.
 
 ### Storage Format Design
@@ -270,12 +300,12 @@ URLs:
 
 ```typescript
 export interface Tag {
-  name: string;         // Without # prefix
-  color?: string;       // Optional hex color for UI
+  name: string; // Without # prefix
+  color?: string; // Optional hex color for UI
 }
 
 export interface ReminderWithTags extends Reminder {
-  tags: string[];       // Array of tag names
+  tags: string[]; // Array of tag names
 }
 ```
 
@@ -283,7 +313,10 @@ export interface ReminderWithTags extends Reminder {
 
 ```typescript
 export function parseTags(notes: string | null): string[];
-export function serializeTags(tags: string[], existingNotes: string | null): string;
+export function serializeTags(
+  tags: string[],
+  existingNotes: string | null,
+): string;
 export function addTag(notes: string | null, tag: string): string;
 export function removeTag(notes: string | null, tag: string): string;
 export function hasTag(notes: string | null, tag: string): boolean;
@@ -345,6 +378,7 @@ filterAnyTags: {
 ```
 
 **Actions:**
+
 - `list` - Returns all unique tags used across all reminders
 - `add` - Adds tag(s) to a reminder
 - `remove` - Removes tag(s) from a reminder
@@ -355,10 +389,14 @@ filterAnyTags: {
 ```typescript
 export async function handleTagAction(args: TagArgs): Promise<CallToolResult> {
   switch (args.action) {
-    case 'list': return handleListAllTags();
-    case 'add': return handleAddTags(args.reminderId!, args.tags || [args.tag!]);
-    case 'remove': return handleRemoveTags(args.reminderId!, args.tags || [args.tag!]);
-    case 'find': return handleFindByTags(args.tags || [args.tag!]);
+    case "list":
+      return handleListAllTags();
+    case "add":
+      return handleAddTags(args.reminderId!, args.tags || [args.tag!]);
+    case "remove":
+      return handleRemoveTags(args.reminderId!, args.tags || [args.tag!]);
+    case "find":
+      return handleFindByTags(args.tags || [args.tag!]);
   }
 }
 ```
@@ -373,6 +411,7 @@ export async function handleTagAction(args: TagArgs): Promise<CallToolResult> {
 ---
 
 ## Phase 4: Integration & Polish
+
 **Estimated Effort: 2-3 days**
 
 ### 4.1 Prompt Template Updates
@@ -380,16 +419,19 @@ export async function handleTagAction(args: TagArgs): Promise<CallToolResult> {
 Update existing prompts to leverage new features:
 
 #### `daily-task-organizer`
+
 - Group tasks by priority
 - Show subtask completion percentages
 - Filter by tags
 
 #### `smart-reminder-creator`
+
 - Suggest priority based on keywords
 - Auto-tag based on content analysis
 - Support checklist items in natural language
 
 #### `reminder-review-assistant`
+
 - Audit priority assignments
 - Find untagged reminders
 - Identify reminders with incomplete subtasks
@@ -442,12 +484,12 @@ Update all reminder responses to include new fields:
 
 ## Implementation Schedule
 
-| Phase | Feature | Duration | Dependencies |
-|-------|---------|----------|--------------|
-| 1 | Priority Support | Days 1-3 | None |
-| 2 | Subtasks/Checklists | Days 4-8 | Phase 1 (for testing) |
-| 3 | Tags/Labels | Days 9-12 | Phase 2 (shared parser patterns) |
-| 4 | Integration & Polish | Days 13-15 | Phases 1-3 |
+| Phase | Feature              | Duration   | Dependencies                     |
+| ----- | -------------------- | ---------- | -------------------------------- |
+| 1     | Priority Support     | Days 1-3   | None                             |
+| 2     | Subtasks/Checklists  | Days 4-8   | Phase 1 (for testing)            |
+| 3     | Tags/Labels          | Days 9-12  | Phase 2 (shared parser patterns) |
+| 4     | Integration & Polish | Days 13-15 | Phases 1-3                       |
 
 **Total Estimated Duration: 15 working days**
 
@@ -457,26 +499,27 @@ Update all reminder responses to include new fields:
 
 ### Technical Risks
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Notes field character limit | Low | High | Test with max-length notes; implement truncation warnings |
-| Format conflicts with user notes | Medium | Medium | Use unique delimiters; provide escape mechanism |
-| Performance with many subtasks | Low | Medium | Lazy parsing; implement limits |
-| EventKit API changes | Low | High | Abstraction layer; version detection |
+| Risk                             | Likelihood | Impact | Mitigation                                                |
+| -------------------------------- | ---------- | ------ | --------------------------------------------------------- |
+| Notes field character limit      | Low        | High   | Test with max-length notes; implement truncation warnings |
+| Format conflicts with user notes | Medium     | Medium | Use unique delimiters; provide escape mechanism           |
+| Performance with many subtasks   | Low        | Medium | Lazy parsing; implement limits                            |
+| EventKit API changes             | Low        | High   | Abstraction layer; version detection                      |
 
 ### Compatibility Risks
 
-| Risk | Mitigation |
-|------|------------|
-| Existing reminders with unstructured notes | Parser handles gracefully; no data loss |
-| Other apps modifying notes | Delimiters designed to survive reformatting |
-| iCloud sync conflicts | Notes are atomic; last-write-wins is acceptable |
+| Risk                                       | Mitigation                                      |
+| ------------------------------------------ | ----------------------------------------------- |
+| Existing reminders with unstructured notes | Parser handles gracefully; no data loss         |
+| Other apps modifying notes                 | Delimiters designed to survive reformatting     |
+| iCloud sync conflicts                      | Notes are atomic; last-write-wins is acceptable |
 
 ---
 
 ## Success Criteria
 
 ### Phase 1 Complete When:
+
 - [ ] Can create reminder with priority via MCP
 - [ ] Can update reminder priority
 - [ ] Can filter reminders by priority
@@ -484,6 +527,7 @@ Update all reminder responses to include new fields:
 - [ ] All tests passing (>90% coverage)
 
 ### Phase 2 Complete When:
+
 - [ ] Can add/remove/toggle subtasks
 - [ ] Subtasks visible as readable text in Reminders app notes
 - [ ] Can create reminder with initial subtasks
@@ -491,6 +535,7 @@ Update all reminder responses to include new fields:
 - [ ] Round-trip parsing maintains data integrity
 
 ### Phase 3 Complete When:
+
 - [ ] Can add/remove tags from reminders
 - [ ] Can list all unique tags
 - [ ] Can filter reminders by tags (ALL/ANY)
@@ -498,6 +543,7 @@ Update all reminder responses to include new fields:
 - [ ] Cross-list tag queries work
 
 ### Phase 4 Complete When:
+
 - [ ] All prompts updated for new features
 - [ ] Documentation complete
 - [ ] Performance benchmarks acceptable
@@ -547,6 +593,6 @@ For users with existing reminders using the MCP:
 
 ---
 
-*Document Version: 1.0*
-*Last Updated: January 2026*
-*Author: Claude (AI Assistant)*
+_Document Version: 1.0_
+_Last Updated: January 2026_
+_Author: Claude (AI Assistant)_

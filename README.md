@@ -942,17 +942,3 @@ The CLI entry point includes a project-root fallback, so you can start the serve
 - Swift binaries for native macOS integration
 - TypeScript compilation for cross-platform compatibility
 
-## Changelog
-
-### v1.3.0 (Enhanced Reminders)
-
-- **Priority Support**: Set priority levels (high/medium/low/none) via native EventKit API
-- **Recurring Reminders**: Support for daily, weekly, monthly, yearly recurrence with flexible rules
-- **Location Triggers**: Geofence-based reminders that trigger on arrival or departure
-- **Tags/Labels**: Cross-list categorization with `[#tag]` format stored in notes
-- **Subtasks/Checklists**: Checklist items with progress tracking stored in notes
-- **New Tool**: `reminders_subtasks` for managing checklist items
-- **Enhanced Filtering**: Filter by priority, recurring, location-based, and tags
-- **Visual Indicators**: 🔄 (recurring), 📍 (location), 🏷️ (tags), 📋 (subtasks)
-
-> **Note on Flagged Status**: The `flagged` parameter is accepted for backward compatibility but has no effect. Apple's EventKit framework does not expose a public `isFlagged` property, so flagged status cannot be read or set programmatically. The `isFlagged` field in responses is always `false`.

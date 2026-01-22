@@ -95,8 +95,8 @@ npx mcp-server-apple-events
    {
      "mcpServers": {
        "apple-reminders": {
-         "command": "mcp-server-apple-events",
-         "args": []
+         "command": "npx",
+         "args": ["-y", "mcp-server-apple-events"]
        }
      }
    }
@@ -147,8 +147,8 @@ Add the following configuration to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "apple-reminders": {
-      "command": "mcp-server-apple-events",
-      "args": []
+      "command": "npx",
+      "args": ["-y", "mcp-server-apple-events"]
     }
   }
 }

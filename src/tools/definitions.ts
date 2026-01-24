@@ -167,8 +167,7 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
             monthsOfYear: {
               type: 'array',
               items: { type: 'integer' },
-              description:
-                'Months for yearly recurrence (1-12). Optional.',
+              description: 'Months for yearly recurrence (1-12). Optional.',
             },
           },
           required: ['frequency'],
@@ -180,7 +179,8 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
         },
         filterLocationBased: {
           type: 'boolean',
-          description: 'Filter to only show location-based reminders when true.',
+          description:
+            'Filter to only show location-based reminders when true.',
         },
         // Location trigger properties for create/update
         locationTrigger: {
@@ -190,7 +190,8 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
           properties: {
             title: {
               type: 'string',
-              description: 'Location name/title (e.g., "Home", "Office", "Grocery Store").',
+              description:
+                'Location name/title (e.g., "Home", "Office", "Grocery Store").',
             },
             latitude: {
               type: 'number',
@@ -456,7 +457,10 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
         action: {
           oneOf: [
             { properties: { action: { const: 'read' } } },
-            { properties: { action: { const: 'create' } }, required: ['title'] },
+            {
+              properties: { action: { const: 'create' } },
+              required: ['title'],
+            },
             {
               properties: { action: { const: 'update' } },
               required: ['subtaskId'],
@@ -469,7 +473,10 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
               properties: { action: { const: 'toggle' } },
               required: ['subtaskId'],
             },
-            { properties: { action: { const: 'reorder' } }, required: ['order'] },
+            {
+              properties: { action: { const: 'reorder' } },
+              required: ['order'],
+            },
           ],
         },
       },

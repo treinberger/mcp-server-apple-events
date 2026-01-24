@@ -16,12 +16,14 @@ import { reminderRepository } from '../../utils/reminderRepository.js';
 import {
   combineSubtasksAndNotes,
   createSubtasksFromTitles,
+  parseSubtasks,
   type Subtask,
   stripSubtasks,
 } from '../../utils/subtaskUtils.js';
 import {
   addTagsToNotes,
   combineTagsAndNotes,
+  extractTags,
   removeTagsFromNotes,
   stripTags,
 } from '../../utils/tagUtils.js';
@@ -43,7 +45,8 @@ import {
  */
 const formatRecurrence = (recurrence: RecurrenceRule): string => {
   const parts: string[] = [];
-  const interval = recurrence.interval > 1 ? `every ${recurrence.interval} ` : '';
+  const interval =
+    recurrence.interval > 1 ? `every ${recurrence.interval} ` : '';
 
   switch (recurrence.frequency) {
     case 'daily':
@@ -60,14 +63,32 @@ const formatRecurrence = (recurrence: RecurrenceRule): string => {
     case 'monthly':
       parts.push(`${interval}month${recurrence.interval > 1 ? 's' : ''}`);
       if (recurrence.daysOfMonth?.length) {
-        parts.push(`on day${recurrence.daysOfMonth.length > 1 ? 's' : ''} ${recurrence.daysOfMonth.join(', ')}`);
+        parts.push(
+          `on day${recurrence.daysOfMonth.length > 1 ? 's' : ''} ${recurrence.daysOfMonth.join(', ')}`,
+        );
       }
       break;
     case 'yearly':
       parts.push(`${interval}year${recurrence.interval > 1 ? 's' : ''}`);
       if (recurrence.monthsOfYear?.length) {
-        const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const months = recurrence.monthsOfYear.map((m) => monthNames[m]).join(', ');
+        const monthNames = [
+          '',
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec',
+        ];
+        const months = recurrence.monthsOfYear
+          .map((m) => monthNames[m])
+          .join(', ');
         parts.push(`in ${months}`);
       }
       break;
@@ -86,9 +107,29 @@ const formatRecurrence = (recurrence: RecurrenceRule): string => {
  * Formats a location trigger for display
  */
 const formatLocationTrigger = (location: LocationTrigger): string => {
-  const proximityText = location.proximity === 'enter' ? 'Arriving at' : 'Leaving';
+  const proximityText =
+    location.proximity === 'enter' ? 'Arriving at' : 'Leaving';
   const radiusText = location.radius ? ` (${location.radius}m radius)` : '';
   return `${proximityText} "${location.title}"${radiusText}`;
+};
+
+/**
+ * Builds icon string based on reminder properties
+ */
+const buildReminderIcons = (reminder: {
+  isFlagged?: boolean;
+  recurrence?: RecurrenceRule;
+  locationTrigger?: LocationTrigger;
+  tags?: string[];
+  subtasks?: Subtask[];
+}): string => {
+  const icons: string[] = [];
+  if (reminder.isFlagged) icons.push('🚩');
+  if (reminder.recurrence) icons.push('🔄');
+  if (reminder.locationTrigger) icons.push('📍');
+  if (reminder.tags && reminder.tags.length > 0) icons.push('🏷️');
+  if (reminder.subtasks && reminder.subtasks.length > 0) icons.push('📋');
+  return icons.length > 0 ? ` ${icons.join('')}` : '';
 };
 
 const formatReminderMarkdown = (reminder: {
@@ -109,17 +150,13 @@ const formatReminderMarkdown = (reminder: {
 }): string[] => {
   const lines: string[] = [];
   const checkbox = reminder.isCompleted ? '[x]' : '[ ]';
-  const flagIcon = reminder.isFlagged ? ' 🚩' : '';
-  const repeatIcon = reminder.recurrence ? ' 🔄' : '';
-  const locationIcon = reminder.locationTrigger ? ' 📍' : '';
-  const tagIcon = reminder.tags && reminder.tags.length > 0 ? ' 🏷️' : '';
-  const subtaskIcon = reminder.subtasks && reminder.subtasks.length > 0 ? ' 📋' : '';
-  lines.push(`- ${checkbox} ${reminder.title}${flagIcon}${repeatIcon}${locationIcon}${tagIcon}${subtaskIcon}`);
+  const icons = buildReminderIcons(reminder);
+  lines.push(`- ${checkbox} ${reminder.title}${icons}`);
   if (reminder.list) lines.push(`  - List: ${reminder.list}`);
   if (reminder.id) lines.push(`  - ID: ${reminder.id}`);
-  if (reminder.priority !== undefined && reminder.priority > 0) {
-    const priorityLabel = PRIORITY_LABELS[reminder.priority] || 'unknown';
-    lines.push(`  - Priority: ${priorityLabel}`);
+  if (reminder.priority !== undefined) {
+    const priorityLabel = PRIORITY_LABELS[reminder.priority] ?? 'unknown';
+    lines.push(`  - Priority: ${priorityLabel} (${reminder.priority})`);
   }
   if (reminder.tags && reminder.tags.length > 0) {
     lines.push(`  - Tags: ${reminder.tags.map((t) => `#${t}`).join(' ')}`);
@@ -128,9 +165,10 @@ const formatReminderMarkdown = (reminder: {
     lines.push(`  - Repeats: ${formatRecurrence(reminder.recurrence)}`);
   }
   if (reminder.locationTrigger) {
-    lines.push(`  - Location: ${formatLocationTrigger(reminder.locationTrigger)}`);
+    lines.push(
+      `  - Location: ${formatLocationTrigger(reminder.locationTrigger)}`,
+    );
   }
-  // Show subtasks with progress
   if (reminder.subtasks && reminder.subtasks.length > 0) {
     const progress = reminder.subtaskProgress;
     const progressText = progress
@@ -142,7 +180,6 @@ const formatReminderMarkdown = (reminder: {
       lines.push(`    - ${subtaskCheckbox} ${subtask.title}`);
     }
   }
-  // Show notes without tag/subtask markers
   const cleanNotes = stripSubtasks(stripTags(reminder.notes));
   if (cleanNotes) {
     lines.push(`  - Notes: ${formatMultilineNotes(cleanNotes)}`);
@@ -163,9 +200,8 @@ export const handleCreateReminder = async (
       ? combineTagsAndNotes(validatedArgs.tags, validatedArgs.note)
       : validatedArgs.note;
 
-    // Combine subtasks with notes if subtasks are provided
-    if (args.subtasks && args.subtasks.length > 0) {
-      const subtasks = createSubtasksFromTitles(args.subtasks);
+    if (validatedArgs.subtasks && validatedArgs.subtasks.length > 0) {
+      const subtasks = createSubtasksFromTitles(validatedArgs.subtasks);
       notesWithMetadata = combineSubtasksAndNotes(subtasks, notesWithMetadata);
     }
 
@@ -195,42 +231,46 @@ export const handleUpdateReminder = async (
   return handleAsyncOperation(async () => {
     const validatedArgs = extractAndValidateArgs(args, UpdateReminderSchema);
 
-    // Handle tag modifications
     let notesToSend = validatedArgs.note;
+    const shouldUpdateTags =
+      Boolean(validatedArgs.tags) ||
+      Boolean(validatedArgs.addTags) ||
+      Boolean(validatedArgs.removeTags);
 
-    // If addTags or removeTags provided, we need to get the current reminder first
-    if (validatedArgs.addTags || validatedArgs.removeTags) {
+    if (shouldUpdateTags) {
       const currentReminder = await reminderRepository.findReminderById(
         validatedArgs.id,
       );
-      let modifiedNotes = currentReminder.notes ?? '';
+      const existingNotes = currentReminder.notes ?? '';
+      const existingSubtasks = parseSubtasks(existingNotes);
+      const notesWithoutSubtasks = stripSubtasks(existingNotes);
+
+      let notesWithTags = notesWithoutSubtasks;
 
       if (validatedArgs.addTags && validatedArgs.addTags.length > 0) {
-        modifiedNotes = addTagsToNotes(validatedArgs.addTags, modifiedNotes);
+        notesWithTags = addTagsToNotes(validatedArgs.addTags, notesWithTags);
       }
 
       if (validatedArgs.removeTags && validatedArgs.removeTags.length > 0) {
-        modifiedNotes = removeTagsFromNotes(
+        notesWithTags = removeTagsFromNotes(
           validatedArgs.removeTags,
-          modifiedNotes,
+          notesWithTags,
         );
       }
 
-      // If note was also provided, use it but preserve tag changes
-      if (validatedArgs.note !== undefined) {
-        // Replace the clean note content but keep the modified tags
-        const cleanNewNote = stripTags(validatedArgs.note);
-        const tagsFromModified = modifiedNotes.match(/\[#[^\]]+\]/g) || [];
-        notesToSend =
-          tagsFromModified.length > 0
-            ? `${tagsFromModified.join(' ')}\n${cleanNewNote}`
-            : cleanNewNote;
-      } else {
-        notesToSend = modifiedNotes;
+      if (validatedArgs.tags) {
+        const baseNote =
+          validatedArgs.note !== undefined
+            ? stripSubtasks(stripTags(validatedArgs.note))
+            : stripTags(notesWithoutSubtasks);
+        notesWithTags = combineTagsAndNotes(validatedArgs.tags, baseNote);
+      } else if (validatedArgs.note !== undefined) {
+        const cleanNewNote = stripSubtasks(stripTags(validatedArgs.note));
+        const tagsFromExisting = extractTags(notesWithTags);
+        notesWithTags = combineTagsAndNotes(tagsFromExisting, cleanNewNote);
       }
-    } else if (validatedArgs.tags) {
-      // Replace all tags with the provided tags
-      notesToSend = combineTagsAndNotes(validatedArgs.tags, validatedArgs.note);
+
+      notesToSend = combineSubtasksAndNotes(existingSubtasks, notesWithTags);
     }
 
     const reminder = await reminderRepository.updateReminder({
@@ -277,8 +317,6 @@ export const handleReadReminders = async (
   return handleAsyncOperation(async () => {
     const validatedArgs = extractAndValidateArgs(args, ReadRemindersSchema);
 
-    // Check if id is provided in args (before validation)
-    // because id might be filtered out by schema validation if it's optional
     if (args.id) {
       const reminder = await reminderRepository.findReminderById(args.id);
       const markdownLines: string[] = [
@@ -288,8 +326,6 @@ export const handleReadReminders = async (
       ];
       return markdownLines.join('\n');
     }
-
-    // Otherwise, return all matching reminders
     const reminders = await reminderRepository.findReminders({
       list: validatedArgs.filterList,
       showCompleted: validatedArgs.showCompleted,

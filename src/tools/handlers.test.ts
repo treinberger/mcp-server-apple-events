@@ -18,6 +18,7 @@ import {
   handleUpdateReminder,
   handleUpdateReminderList,
 } from '../tools/handlers/index.js';
+import type { Reminder } from '../types/index.js';
 import { calendarRepository } from '../utils/calendarRepository.js';
 import { handleAsyncOperation } from '../utils/errorHandling.js';
 import { reminderRepository } from '../utils/reminderRepository.js';
@@ -114,6 +115,52 @@ describe('Tool Handlers', () => {
       expect(content).toContain('Notes: Line 1\n    Line 2');
     });
 
+    it('displays all priority levels (0, 1, 5, 9) with label and value in read output', async () => {
+      const mockReminders = [
+        {
+          id: 'a',
+          title: 'P0',
+          isCompleted: false,
+          list: 'L',
+          priority: 0,
+          isFlagged: false,
+        },
+        {
+          id: 'b',
+          title: 'P1',
+          isCompleted: false,
+          list: 'L',
+          priority: 1,
+          isFlagged: false,
+        },
+        {
+          id: 'c',
+          title: 'P5',
+          isCompleted: false,
+          list: 'L',
+          priority: 5,
+          isFlagged: false,
+        },
+        {
+          id: 'd',
+          title: 'P9',
+          isCompleted: false,
+          list: 'L',
+          priority: 9,
+          isFlagged: false,
+        },
+      ];
+      mockReminderRepository.findReminders.mockResolvedValue(mockReminders);
+
+      const result = await handleReadReminders({ action: 'read' });
+      const content = getTextContent(result.content);
+
+      expect(content).toContain('Priority: none (0)');
+      expect(content).toContain('Priority: high (1)');
+      expect(content).toContain('Priority: medium (5)');
+      expect(content).toContain('Priority: low (9)');
+    });
+
     it('renders single reminder details including metadata and completion state', async () => {
       const mockReminder = {
         id: '456',
@@ -178,6 +225,18 @@ describe('Tool Handlers', () => {
       expect(content).toContain('Successfully created reminder "New Task"');
       expect(content).toContain('- ID: rem-123');
     });
+
+    it('rejects invalid subtask titles during creation', async () => {
+      const result = await handleCreateReminder({
+        action: 'create',
+        title: 'New Task',
+        subtasks: [''],
+      });
+
+      expect(result.isError).toBe(true);
+      const content = getTextContent(result.content);
+      expect(content).toContain('Input validation failed');
+    });
   });
 
   describe('handleUpdateReminder', () => {
@@ -204,6 +263,80 @@ describe('Tool Handlers', () => {
       const content = getTextContent(result.content);
       expect(content).toContain('Successfully updated reminder "Updated Task"');
       expect(content).toContain('- ID: rem-456');
+    });
+
+    it('preserves existing subtasks when adding tags with a new note', async () => {
+      const existingNotes =
+        '[#work]\nOriginal note\n\n---SUBTASKS---\n[ ] {abc12345} First subtask\n---END SUBTASKS---';
+      const mockReminder: Reminder = {
+        id: 'rem-789',
+        title: 'Tagged Task',
+        isCompleted: false,
+        list: 'Inbox',
+        notes: existingNotes,
+        priority: 0,
+        isFlagged: false,
+      };
+      const mockReminderJSON = {
+        ...mockReminder,
+        url: null,
+        dueDate: null,
+        recurrence: null,
+        locationTrigger: null,
+        notes: existingNotes,
+      };
+      mockReminderRepository.findReminderById.mockResolvedValue(mockReminder);
+      mockReminderRepository.updateReminder.mockResolvedValue(mockReminderJSON);
+
+      await handleUpdateReminder({
+        action: 'update',
+        id: 'rem-789',
+        addTags: ['urgent'],
+        note: 'New note',
+      });
+
+      const updateArgs = mockReminderRepository.updateReminder.mock.calls[0][0];
+      expect(updateArgs.notes).toContain('[#work]');
+      expect(updateArgs.notes).toContain('[#urgent]');
+      expect(updateArgs.notes).toContain('New note');
+      expect(updateArgs.notes).toContain('---SUBTASKS---');
+      expect(updateArgs.notes).not.toContain('Original note');
+    });
+
+    it('preserves existing notes and subtasks when replacing tags', async () => {
+      const existingNotes =
+        '[#old]\nKeep this note\n\n---SUBTASKS---\n[ ] {def67890} Another subtask\n---END SUBTASKS---';
+      const mockReminder: Reminder = {
+        id: 'rem-321',
+        title: 'Retagged Task',
+        isCompleted: false,
+        list: 'Inbox',
+        notes: existingNotes,
+        priority: 0,
+        isFlagged: false,
+      };
+      const mockReminderJSON = {
+        ...mockReminder,
+        url: null,
+        dueDate: null,
+        recurrence: null,
+        locationTrigger: null,
+        notes: existingNotes,
+      };
+      mockReminderRepository.findReminderById.mockResolvedValue(mockReminder);
+      mockReminderRepository.updateReminder.mockResolvedValue(mockReminderJSON);
+
+      await handleUpdateReminder({
+        action: 'update',
+        id: 'rem-321',
+        tags: ['home'],
+      });
+
+      const updateArgs = mockReminderRepository.updateReminder.mock.calls[0][0];
+      expect(updateArgs.notes).toContain('[#home]');
+      expect(updateArgs.notes).toContain('Keep this note');
+      expect(updateArgs.notes).toContain('---SUBTASKS---');
+      expect(updateArgs.notes).not.toContain('[#old]');
     });
   });
 

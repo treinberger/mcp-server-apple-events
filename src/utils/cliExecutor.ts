@@ -12,6 +12,7 @@ import {
   getEnvironmentBinaryConfig,
 } from './binaryValidator.js';
 import { FILE_SYSTEM } from './constants.js';
+import { bufferToString } from './helpers.js';
 import {
   hasBeenPrompted,
   type PermissionDomain,
@@ -158,12 +159,6 @@ export class CliPermissionError extends Error {
  * Calendar action strings used in Swift CLI (different from MCP tool action names)
  */
 
-const bufferToString = (data?: string | Buffer | null): string | null => {
-  if (typeof data === 'string') return data;
-  if (Buffer.isBuffer(data)) return data.toString('utf8');
-  return data == null ? null : String(data);
-};
-
 /**
  * Parses JSON output from CLI
  */
@@ -179,7 +174,6 @@ const parseCliOutput = <T>(output: string): T => {
     return parsed.result;
   }
 
-  // Check for permission errors and throw specialized error
   const permissionDomain = detectPermissionError(parsed.message);
   if (permissionDomain) {
     throw new CliPermissionError(parsed.message, permissionDomain);
@@ -197,7 +191,6 @@ const runCli = async <T>(cliPath: string, args: string[]): Promise<T> => {
     }
     return parseCliOutput(normalized);
   } catch (error) {
-    // Preserve CliPermissionError for retry logic
     if (error instanceof CliPermissionError) {
       throw error;
     }
@@ -264,8 +257,6 @@ export async function executeCli<T>(args: string[]): Promise<T> {
   };
 
   // Proactively trigger AppleScript permission prompt on first access
-  // This ensures the permission dialog appears even in non-interactive contexts
-  // where the Swift binary's native EventKit permission request may be suppressed
   if (!hasBeenPrompted(domain)) {
     await recordPromptResult(domain);
   }
@@ -273,7 +264,6 @@ export async function executeCli<T>(args: string[]): Promise<T> {
   try {
     return await runCli<T>(cliPath, args);
   } catch (error) {
-    // On permission error, trigger AppleScript prompt and retry once
     if (error instanceof CliPermissionError) {
       const retryPromptResult = await recordPromptResult(error.domain, true);
       try {

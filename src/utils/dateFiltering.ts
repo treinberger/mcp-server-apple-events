@@ -24,6 +24,7 @@ export type DateFilter =
 interface DateBoundaries {
   today: Date;
   tomorrow: Date;
+  dayAfterTomorrow: Date;
   weekEnd: Date;
 }
 
@@ -33,9 +34,11 @@ interface DateBoundaries {
 function createDateBoundaries(): DateBoundaries {
   const today = getTodayStart();
   const tomorrow = getTomorrowStart();
+  const dayAfterTomorrow = getTomorrowStart();
+  dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
   const weekEnd = getWeekEnd();
 
-  return { today, tomorrow, weekEnd };
+  return { today, tomorrow, dayAfterTomorrow, weekEnd };
 }
 
 /**
@@ -49,7 +52,7 @@ function filterRemindersByDate(
     return reminders.filter((reminder) => !reminder.dueDate);
   }
 
-  const { today, tomorrow, weekEnd } = createDateBoundaries();
+  const { today, tomorrow, dayAfterTomorrow, weekEnd } = createDateBoundaries();
 
   return reminders.filter((reminder) => {
     if (!reminder.dueDate) return false;
@@ -64,11 +67,8 @@ function filterRemindersByDate(
       case 'today':
         return dueDate >= today && dueDate < tomorrow;
 
-      case 'tomorrow': {
-        const dayAfterTomorrow = getTomorrowStart();
-        dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+      case 'tomorrow':
         return dueDate >= tomorrow && dueDate < dayAfterTomorrow;
-      }
 
       case 'this-week':
         return dueDate >= today && dueDate <= weekEnd;
@@ -181,8 +181,9 @@ export function applyReminderFilters(
 
   // Filter by tags (must have ALL specified tags)
   if (filters.tags && filters.tags.length > 0) {
+    const { tags } = filters;
     filteredReminders = filteredReminders.filter((reminder) =>
-      hasAllTags(reminder.tags, filters.tags!),
+      hasAllTags(reminder.tags, tags),
     );
   }
 

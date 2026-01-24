@@ -10,6 +10,24 @@
 const TAG_REGEX = /\[#([^\]]+)\]/g;
 
 /**
+ * Normalizes a tag by removing # prefix, trimming, and lowercasing
+ * @param tag - Tag string to normalize
+ * @returns Normalized tag string
+ */
+function normalizeTag(tag: string): string {
+  return tag.replace(/^#/, '').trim().toLowerCase();
+}
+
+/**
+ * Normalizes an array of tags
+ * @param tags - Array of tags to normalize
+ * @returns Array of normalized tags
+ */
+function normalizeTags(tags: string[]): string[] {
+  return tags.map(normalizeTag);
+}
+
+/**
  * Extracts tags from notes content
  * @param notes - The notes string that may contain tags
  * @returns Array of tag names (without # prefix)
@@ -18,16 +36,17 @@ export function extractTags(notes: string | null | undefined): string[] {
   if (!notes) return [];
 
   const tags: string[] = [];
-  let match: RegExpExecArray | null;
-
-  while ((match = TAG_REGEX.exec(notes)) !== null) {
+  for (
+    let match = TAG_REGEX.exec(notes);
+    match !== null;
+    match = TAG_REGEX.exec(notes)
+  ) {
     const tag = match[1].trim().toLowerCase();
     if (tag && !tags.includes(tag)) {
       tags.push(tag);
     }
   }
 
-  // Reset regex lastIndex for next use
   TAG_REGEX.lastIndex = 0;
 
   return tags;
@@ -58,8 +77,7 @@ export function formatTags(tags: string[]): string {
 
   return tags
     .map((tag) => {
-      // Remove # prefix if present, normalize to lowercase
-      const cleanTag = tag.replace(/^#/, '').trim().toLowerCase();
+      const cleanTag = normalizeTag(tag);
       return cleanTag ? `[#${cleanTag}]` : '';
     })
     .filter(Boolean)
@@ -80,7 +98,9 @@ export function combineTagsAndNotes(
   const cleanNotes = stripTags(notes);
 
   // Merge existing tags with new tags (deduplicating)
-  const allTags = tags ? [...new Set([...tags, ...existingTags])] : existingTags;
+  const allTags = tags
+    ? [...new Set([...tags, ...existingTags])]
+    : existingTags;
 
   const formattedTags = formatTags(allTags);
 
@@ -106,10 +126,7 @@ export function addTagsToNotes(
   const existingTags = extractTags(notes);
   const cleanNotes = stripTags(notes);
 
-  // Normalize and deduplicate
-  const normalizedNewTags = tagsToAdd.map((t) =>
-    t.replace(/^#/, '').trim().toLowerCase(),
-  );
+  const normalizedNewTags = normalizeTags(tagsToAdd);
   const allTags = [...new Set([...existingTags, ...normalizedNewTags])];
 
   const formattedTags = formatTags(allTags);
@@ -136,12 +153,8 @@ export function removeTagsFromNotes(
   const existingTags = extractTags(notes);
   const cleanNotes = stripTags(notes);
 
-  // Normalize tags to remove
-  const normalizedRemove = tagsToRemove.map((t) =>
-    t.replace(/^#/, '').trim().toLowerCase(),
-  );
+  const normalizedRemove = normalizeTags(tagsToRemove);
 
-  // Filter out tags to remove
   const remainingTags = existingTags.filter(
     (tag) => !normalizedRemove.includes(tag),
   );
@@ -170,10 +183,8 @@ export function hasAllTags(
   if (!filterTags || filterTags.length === 0) return true;
   if (!reminderTags || reminderTags.length === 0) return false;
 
-  const normalizedReminderTags = reminderTags.map((t) => t.toLowerCase());
-  const normalizedFilterTags = filterTags.map((t) =>
-    t.replace(/^#/, '').toLowerCase(),
-  );
+  const normalizedReminderTags = normalizeTags(reminderTags);
+  const normalizedFilterTags = normalizeTags(filterTags);
 
   return normalizedFilterTags.every((tag) =>
     normalizedReminderTags.includes(tag),

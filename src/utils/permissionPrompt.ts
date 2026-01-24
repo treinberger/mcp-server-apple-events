@@ -6,6 +6,7 @@
 import type { ExecFileException } from 'node:child_process';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { bufferToString } from './helpers.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -31,13 +32,10 @@ const APPLESCRIPT_COMMANDS: Record<PermissionDomain, string> = {
     'osascript -e \'tell application "Calendar" to get the name of every calendar\'',
 };
 
-const promptPromises = new Map<PermissionDomain, Promise<PermissionPromptResult>>();
-
-const bufferToString = (data?: string | Buffer | null): string | null => {
-  if (typeof data === 'string') return data;
-  if (Buffer.isBuffer(data)) return data.toString('utf8');
-  return data == null ? null : String(data);
-};
+const promptPromises = new Map<
+  PermissionDomain,
+  Promise<PermissionPromptResult>
+>();
 
 const normalizeAppleScriptError = (error: unknown): string => {
   if (!error) return 'Unknown AppleScript error';
@@ -47,7 +45,7 @@ const normalizeAppleScriptError = (error: unknown): string => {
       stderr?: string | Buffer;
     };
     const stderr = bufferToString(execError.stderr);
-    if (stderr && stderr.trim()) {
+    if (stderr?.trim()) {
       return stderr.trim();
     }
     return error.message;

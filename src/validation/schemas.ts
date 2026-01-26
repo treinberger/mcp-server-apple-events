@@ -197,7 +197,7 @@ const TagSchema = z
   .string()
   .min(1)
   .max(50)
-  .regex(/^[a-zA-Z0-9_-]+$/, {
+  .regex(/^#?[a-zA-Z0-9_-]+$/, {
     message: 'Tags can only contain letters, numbers, underscores, and hyphens',
   });
 

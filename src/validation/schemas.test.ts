@@ -152,6 +152,17 @@ describe('ValidationSchemas', () => {
   });
 
   describe('Tool-specific schemas', () => {
+    describe('Tag validation', () => {
+      it('allows tags with optional leading #', () => {
+        expect(() =>
+          CreateReminderSchema.parse({
+            title: 'Tagged reminder',
+            tags: ['work', '#urgent'],
+          }),
+        ).not.toThrow();
+      });
+    });
+
     describe('Action schemas validation patterns', () => {
       it.each([
         {

@@ -228,7 +228,7 @@ export async function executeCli<T>(args: string[]): Promise<T> {
   const config = {
     ...getEnvironmentBinaryConfig(),
     allowedPaths: [
-      '/bin/',
+      '/bin/EventKitCLI',
       '/dist/swift/bin/',
       '/src/swift/bin/',
       '/swift/bin/',

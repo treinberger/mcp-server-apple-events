@@ -17,6 +17,9 @@ pnpm test
 # Run a single test file
 pnpm test -- src/path/to/file.test.ts
 
+# Run tests matching a pattern
+pnpm test -- --testNamePattern="pattern"
+
 # Lint and format with Biome
 pnpm lint
 ```
@@ -40,15 +43,19 @@ src/
 │   ├── index.ts          # Tool routing: normalizes names, dispatches to handlers
 │   └── handlers/         # Domain-specific CRUD handlers
 │       ├── reminderHandlers.ts
+│       ├── subtaskHandlers.ts
 │       ├── listHandlers.ts
-│       └── calendarHandlers.ts
+│       ├── calendarHandlers.ts
+│       └── shared.ts     # Common formatting utilities (extractAndValidateArgs, formatListMarkdown)
 ├── utils/
 │   ├── cliExecutor.ts    # Executes Swift binary, parses JSON responses
 │   ├── permissionPrompt.ts  # AppleScript-based permission prompting
 │   ├── reminderRepository.ts  # Repository pattern for reminders
 │   ├── calendarRepository.ts  # Repository pattern for calendar events
 │   ├── binaryValidator.ts     # Secure binary path validation
-│   └── errorHandling.ts       # Centralized async error wrapper
+│   ├── errorHandling.ts       # Centralized async error wrapper
+│   ├── helpers.ts             # CLI argument builders (addOptionalArg, nullToUndefined)
+│   └── subtaskUtils.ts        # Subtask parsing and notes field manipulation
 ├── validation/
 │   └── schemas.ts        # Zod schemas for input validation
 └── types/
@@ -121,6 +128,7 @@ Tools support both underscore and dot notation:
 
 - `reminders_tasks` / `reminders.tasks`
 - `reminders_lists` / `reminders.lists`
+- `reminders_subtasks` / `reminders.subtasks`
 - `calendar_events` / `calendar.events`
 - `calendar_calendars` / `calendar.calendars`
 
@@ -130,6 +138,23 @@ Tools support both underscore and dot notation:
 - Mock the CLI executor in `src/utils/__mocks__/cliExecutor.ts`
 - Coverage threshold: 96% statements, 90% branches
 - Swift binary tests in `src/swift/Info.plist.test.ts` validate permission keys
+
+### Notes Field Conventions
+
+Subtasks and tags are stored in the reminder notes field using structured formats:
+
+```text
+User notes here...
+
+[#tag1] [#tag2]
+
+---SUBTASKS---
+[ ] {a1b2c3d4} First subtask
+[x] {e5f6g7h8} Completed subtask
+---END SUBTASKS---
+```
+
+When modifying notes programmatically, preserve existing tags and subtasks unless explicitly updating them.
 
 ## Critical Constraints
 

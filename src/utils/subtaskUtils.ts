@@ -14,6 +14,8 @@
  * - Coexists with tags ([#tag] format) and user notes
  */
 
+import { webcrypto } from 'node:crypto';
+
 // Subtask section markers
 const SUBTASK_START = '---SUBTASKS---';
 const SUBTASK_END = '---END SUBTASKS---';
@@ -38,7 +40,7 @@ export interface Subtask {
  */
 export function generateSubtaskId(): string {
   const bytes = new Uint8Array(4);
-  crypto.getRandomValues(bytes);
+  webcrypto.getRandomValues(bytes);
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');

@@ -433,6 +433,27 @@ describe('ReminderRepository', () => {
       expect(result).toBe(mockResult);
     });
 
+    it('should allow empty notes when updating reminder', async () => {
+      const data = {
+        id: '123',
+        notes: '',
+      };
+      const mockResult: { id: string } = { id: '123' };
+
+      mockExecuteCli.mockResolvedValue(mockResult);
+
+      await repository.updateReminder(data);
+
+      expect(mockExecuteCli).toHaveBeenCalledWith([
+        '--action',
+        'update',
+        '--id',
+        '123',
+        '--note',
+        '',
+      ]);
+    });
+
     it('should update reminder with minimal fields', async () => {
       const data = {
         id: '123',

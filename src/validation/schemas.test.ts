@@ -163,6 +163,43 @@ describe('ValidationSchemas', () => {
       });
     });
 
+    describe('Flagged validation', () => {
+      it('rejects flagged=true in CreateReminderSchema', () => {
+        expect(() =>
+          CreateReminderSchema.parse({
+            title: 'Flagged reminder',
+            flagged: true,
+          }),
+        ).toThrow('Flagged reminders are not supported by EventKit');
+      });
+
+      it('rejects flagged=false in CreateReminderSchema', () => {
+        expect(() =>
+          CreateReminderSchema.parse({
+            title: 'Flagged reminder',
+            flagged: false,
+          }),
+        ).toThrow('Flagged reminders are not supported by EventKit');
+      });
+
+      it('rejects flagged in UpdateReminderSchema', () => {
+        expect(() =>
+          UpdateReminderSchema.parse({
+            id: '123',
+            flagged: true,
+          }),
+        ).toThrow('Flagged reminders are not supported by EventKit');
+      });
+
+      it('allows omitting flagged field', () => {
+        expect(() =>
+          CreateReminderSchema.parse({
+            title: 'Normal reminder',
+          }),
+        ).not.toThrow();
+      });
+    });
+
     describe('Action schemas validation patterns', () => {
       it.each([
         {

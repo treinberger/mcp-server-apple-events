@@ -15,7 +15,7 @@ export function addOptionalArg(
   flag: string,
   value: string | undefined,
 ): void {
-  if (value) {
+  if (value !== undefined) {
     args.push(flag, value);
   }
 }

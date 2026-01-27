@@ -41,6 +41,56 @@ import {
 } from './shared.js';
 
 /**
+ * Rebuilds notes for update operation, handling tags and subtasks
+ * @param currentNotes - Existing notes from the reminder
+ * @param newNote - New note content (if provided)
+ * @param tags - Complete tag replacement (if provided)
+ * @param addTags - Tags to add
+ * @param removeTags - Tags to remove
+ * @returns Rebuilt notes with tags and subtasks preserved
+ */
+function rebuildNotesForUpdate(
+  currentNotes: string | undefined,
+  newNote: string | undefined,
+  tags: string[] | undefined,
+  addTags: string[] | undefined,
+  removeTags: string[] | undefined,
+): string {
+  const existingNotes = currentNotes ?? '';
+  const existingSubtasks = parseSubtasks(existingNotes);
+  const notesWithoutSubtasks = stripSubtasks(existingNotes);
+
+  let notesWithTags = notesWithoutSubtasks;
+
+  // Add tags
+  if (addTags && addTags.length > 0) {
+    notesWithTags = addTagsToNotes(addTags, notesWithTags);
+  }
+
+  // Remove tags
+  if (removeTags && removeTags.length > 0) {
+    notesWithTags = removeTagsFromNotes(removeTags, notesWithTags);
+  }
+
+  // Replace all tags
+  if (tags) {
+    const baseNote =
+      newNote !== undefined
+        ? stripSubtasks(stripTags(newNote))
+        : stripTags(notesWithoutSubtasks);
+    notesWithTags = combineTagsAndNotes(tags, baseNote);
+  } else if (newNote !== undefined) {
+    // Update note content while preserving existing tags
+    const cleanNewNote = stripSubtasks(stripTags(newNote));
+    const tagsFromExisting = extractTags(notesWithTags);
+    notesWithTags = combineTagsAndNotes(tagsFromExisting, cleanNewNote);
+  }
+
+  // Recombine with subtasks
+  return combineSubtasksAndNotes(existingSubtasks, notesWithTags);
+}
+
+/**
  * Formats a recurrence rule for display
  */
 const formatRecurrence = (recurrence: RecurrenceRule): string => {
@@ -246,36 +296,13 @@ export const handleUpdateReminder = async (
       const currentReminder = await reminderRepository.findReminderById(
         validatedArgs.id,
       );
-      const existingNotes = currentReminder.notes ?? '';
-      const existingSubtasks = parseSubtasks(existingNotes);
-      const notesWithoutSubtasks = stripSubtasks(existingNotes);
-
-      let notesWithTags = notesWithoutSubtasks;
-
-      if (validatedArgs.addTags && validatedArgs.addTags.length > 0) {
-        notesWithTags = addTagsToNotes(validatedArgs.addTags, notesWithTags);
-      }
-
-      if (validatedArgs.removeTags && validatedArgs.removeTags.length > 0) {
-        notesWithTags = removeTagsFromNotes(
-          validatedArgs.removeTags,
-          notesWithTags,
-        );
-      }
-
-      if (validatedArgs.tags) {
-        const baseNote =
-          validatedArgs.note !== undefined
-            ? stripSubtasks(stripTags(validatedArgs.note))
-            : stripTags(notesWithoutSubtasks);
-        notesWithTags = combineTagsAndNotes(validatedArgs.tags, baseNote);
-      } else if (validatedArgs.note !== undefined) {
-        const cleanNewNote = stripSubtasks(stripTags(validatedArgs.note));
-        const tagsFromExisting = extractTags(notesWithTags);
-        notesWithTags = combineTagsAndNotes(tagsFromExisting, cleanNewNote);
-      }
-
-      notesToSend = combineSubtasksAndNotes(existingSubtasks, notesWithTags);
+      notesToSend = rebuildNotesForUpdate(
+        currentReminder.notes,
+        validatedArgs.note,
+        validatedArgs.tags,
+        validatedArgs.addTags,
+        validatedArgs.removeTags,
+      );
     }
 
     const reminder = await reminderRepository.updateReminder({

@@ -729,6 +729,83 @@ describe('cliExecutor', () => {
         false,
       );
     });
+
+    it('handles non-permission error during retry', async () => {
+      const permissionError = JSON.stringify({
+        status: 'error',
+        message: 'Reminder permission denied.',
+      });
+
+      const networkError = JSON.stringify({
+        status: 'error',
+        message: 'Network connection failed.',
+      });
+
+      let callCount = 0;
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        callCount++;
+        // First call: permission error
+        // Second call (after retry): network error
+        cb?.(null, callCount === 1 ? permissionError : networkError, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const promise = executeCli(['--action', 'read']);
+      await expect(promise).rejects.toThrow('Network connection failed.');
+      await expect(promise).rejects.not.toThrow(PERMISSION_FALLBACK_PREFIX);
+
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+    });
+
+    it('succeeds on retry after permission prompt', async () => {
+      const permissionError = JSON.stringify({
+        status: 'error',
+        message: 'Reminder permission denied.',
+      });
+
+      const successResponse = JSON.stringify({
+        status: 'success',
+        result: { lists: [], reminders: [] },
+      });
+
+      let callCount = 0;
+      mockExecFile.mockImplementation(((
+        _cliPath: string,
+        _args: readonly string[] | null | undefined,
+        optionsOrCallback?: ExecFileOptions | null | ExecFileCallback,
+        callback?: ExecFileCallback,
+      ) => {
+        const cb = invokeCallback(optionsOrCallback, callback);
+        callCount++;
+        // First call: permission error
+        // Second call (after retry): success
+        cb?.(null, callCount === 1 ? permissionError : successResponse, '');
+        return {} as ChildProcess;
+      }) as unknown as typeof execFile);
+
+      const result = await executeCli(['--action', 'read']);
+      expect(result).toEqual({ lists: [], reminders: [] });
+
+      expect(mockExecFile).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenCalledTimes(2);
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        1,
+        'reminders',
+        false,
+      );
+      expect(mockTriggerPermissionPrompt).toHaveBeenNthCalledWith(
+        2,
+        'reminders',
+        true,
+      );
+    });
   });
 
   describe('CliPermissionError', () => {

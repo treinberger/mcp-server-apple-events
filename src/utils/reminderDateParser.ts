@@ -6,7 +6,7 @@
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_ONLY_WITH_TZ_REGEX = /^(\d{4}-\d{2}-\d{2})(Z|[+-]\d{2}:?\d{2})$/i;
 const DATE_TIME_NO_TZ_REGEX =
-  /^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/;
+  /^(\d{4}-\d{2}-\d{2})[ T]+(\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/;
 const TIMEZONE_SUFFIX_REGEX = /(Z|[+-]\d{2}(?::?\d{2})?)$/i;
 
 const toNumber = (value: string): number => Number.parseInt(value, 10);
@@ -23,7 +23,21 @@ const createLocalDate = (
     return undefined;
   }
 
-  return new Date(year, month - 1, day, hour, minute, second, 0);
+  const date = new Date(year, month - 1, day, hour, minute, second, 0);
+
+  // Validate that the date wasn't auto-corrected by JavaScript
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date.getHours() !== hour ||
+    date.getMinutes() !== minute ||
+    date.getSeconds() !== second
+  ) {
+    return undefined;
+  }
+
+  return date;
 };
 
 const normalizeTimezoneSegment = (segment: string): string => {
@@ -96,6 +110,12 @@ export const parseReminderDueDate = (
 
   if (TIMEZONE_SUFFIX_REGEX.test(trimmed)) {
     return parseWithNative(trimmed);
+  }
+
+  // Reject strings that don't match expected date format patterns
+  // Valid formats should only contain: digits, hyphens, colons, spaces, T, Z, +, -, and dots
+  if (!/^[\d\-:T\s.Z+]+$/.test(trimmed)) {
+    return undefined;
   }
 
   return parseWithNative(trimmed);

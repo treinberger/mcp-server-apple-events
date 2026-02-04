@@ -27,6 +27,28 @@ export interface LocationTriggerJSON {
   proximity: 'enter' | 'leave' | 'none';
 }
 
+export interface StructuredLocationJSON {
+  title: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  radius?: number | null;
+}
+
+export interface AlarmJSON {
+  relativeOffset?: number | null;
+  absoluteDate?: string | null;
+  locationTrigger?: LocationTriggerJSON | null;
+}
+
+export interface ParticipantJSON {
+  name?: string | null;
+  url: string;
+  status?: string | null;
+  role?: string | null;
+  type?: string | null;
+  isCurrentUser?: boolean | null;
+}
+
 /**
  * JSON interfaces matching the output from EventKitCLI
  */
@@ -38,10 +60,17 @@ export interface ReminderJSON {
   list: string;
   notes: string | null;
   url: string | null;
+  location?: string | null;
+  timeZone?: string | null;
   dueDate: string | null;
+  startDate?: string | null;
+  completionDate?: string | null;
+  creationDate?: string | null;
+  lastModifiedDate?: string | null;
+  externalId?: string | null;
   priority: number;
-  isFlagged: boolean;
-  recurrence: RecurrenceRuleJSON | null;
+  alarms?: AlarmJSON[] | null;
+  recurrenceRules?: RecurrenceRuleJSON[] | null;
   locationTrigger: LocationTriggerJSON | null;
 }
 
@@ -58,8 +87,20 @@ export interface EventJSON {
   endDate: string;
   notes: string | null;
   location: string | null;
+  structuredLocation?: StructuredLocationJSON | null;
   url: string | null;
   isAllDay: boolean;
+  availability?: string | null;
+  alarms?: AlarmJSON[] | null;
+  recurrenceRules?: RecurrenceRuleJSON[] | null;
+  organizer?: ParticipantJSON | null;
+  attendees?: ParticipantJSON[] | null;
+  status?: string | null;
+  isDetached?: boolean | null;
+  occurrenceDate?: string | null;
+  creationDate?: string | null;
+  lastModifiedDate?: string | null;
+  externalId?: string | null;
 }
 
 export interface CalendarJSON {
@@ -90,10 +131,13 @@ export interface CreateReminderData {
   list?: string;
   notes?: string;
   url?: string;
+  location?: string;
+  startDate?: string;
   dueDate?: string;
   priority?: number;
-  isFlagged?: boolean;
-  recurrence?: RecurrenceRuleJSON;
+  completionDate?: string;
+  alarms?: AlarmJSON[];
+  recurrenceRules?: RecurrenceRuleJSON[];
   locationTrigger?: LocationTriggerJSON;
 }
 
@@ -103,11 +147,15 @@ export interface UpdateReminderData {
   list?: string;
   notes?: string;
   url?: string;
+  location?: string;
   isCompleted?: boolean;
+  completionDate?: string;
+  startDate?: string;
   dueDate?: string;
   priority?: number;
-  isFlagged?: boolean;
-  recurrence?: RecurrenceRuleJSON;
+  alarms?: AlarmJSON[];
+  clearAlarms?: boolean;
+  recurrenceRules?: RecurrenceRuleJSON[];
   clearRecurrence?: boolean;
   locationTrigger?: LocationTriggerJSON;
   clearLocationTrigger?: boolean;
@@ -120,8 +168,12 @@ export interface CreateEventData {
   calendar?: string;
   notes?: string;
   location?: string;
+  structuredLocation?: StructuredLocationJSON;
   url?: string;
   isAllDay?: boolean;
+  availability?: string;
+  alarms?: AlarmJSON[];
+  recurrenceRules?: RecurrenceRuleJSON[];
 }
 
 export interface UpdateEventData {
@@ -132,6 +184,13 @@ export interface UpdateEventData {
   calendar?: string;
   notes?: string;
   location?: string;
+  structuredLocation?: StructuredLocationJSON | null;
   url?: string;
   isAllDay?: boolean;
+  availability?: string;
+  alarms?: AlarmJSON[];
+  clearAlarms?: boolean;
+  recurrenceRules?: RecurrenceRuleJSON[];
+  clearRecurrence?: boolean;
+  span?: 'this-event' | 'future-events';
 }

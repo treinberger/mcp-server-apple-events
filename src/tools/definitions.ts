@@ -60,14 +60,29 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
           description:
             'The title of the reminder (REQUIRED for create, optional for update).',
         },
+        startDate: {
+          type: 'string',
+          description:
+            "Start date. RECOMMENDED format: 'YYYY-MM-DD HH:mm:ss' (local time without timezone). Also supports 'YYYY-MM-DD' and ISO 8601 with timezone.",
+        },
         dueDate: {
           type: 'string',
           description:
             "Due date. RECOMMENDED format: 'YYYY-MM-DD HH:mm:ss' (local time without timezone, e.g., '2025-11-04 18:00:00'). Also supports: 'YYYY-MM-DD', 'YYYY-MM-DDTHH:mm:ss', or ISO 8601 with timezone (e.g., '2025-10-30T04:00:00Z'). When no timezone is specified, the time is interpreted as local time.",
         },
+        completionDate: {
+          type: 'string',
+          description:
+            'Completion date/time (for update). When provided, sets the completion date of the reminder.',
+        },
         note: {
           type: 'string',
           description: 'Additional notes for the reminder.',
+        },
+        location: {
+          type: 'string',
+          description:
+            'Location text for the reminder (EKCalendarItem.location). Not the same as a location-based trigger.',
         },
         url: {
           type: 'string',
@@ -84,10 +99,61 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
           description:
             'Priority level: 0=none, 1=high, 5=medium, 9=low (for create/update).',
         },
-        flagged: {
-          type: 'boolean',
+        alarms: {
+          type: 'array',
           description:
-            'Whether the reminder is flagged (shows flag icon in Reminders app).',
+            'Alarms for the reminder (EKCalendarItem.alarms). Each alarm must specify exactly one of relativeOffset (seconds), absoluteDate, or locationTrigger.',
+          items: {
+            type: 'object',
+            properties: {
+              relativeOffset: {
+                type: 'number',
+                description:
+                  'Seconds offset for a relative alarm (negative = before due/start). Example: -900 for 15 minutes before.',
+              },
+              absoluteDate: {
+                type: 'string',
+                description:
+                  'Absolute trigger date/time for the alarm. Supports the same formats as dueDate.',
+              },
+              locationTrigger: {
+                type: 'object',
+                description:
+                  'Location-based (geofence) alarm. Equivalent to setting EKAlarm.structuredLocation + proximity.',
+                properties: {
+                  title: {
+                    type: 'string',
+                    description:
+                      'Location name/title (e.g., "Home", "Office").',
+                  },
+                  latitude: {
+                    type: 'number',
+                    description: 'Latitude coordinate of the location.',
+                  },
+                  longitude: {
+                    type: 'number',
+                    description: 'Longitude coordinate of the location.',
+                  },
+                  radius: {
+                    type: 'number',
+                    description: 'Geofence radius in meters (default 100).',
+                    default: 100,
+                  },
+                  proximity: {
+                    type: 'string',
+                    enum: ['enter', 'leave'],
+                    description:
+                      'When to trigger: "enter" fires when arriving, "leave" fires when departing.',
+                  },
+                },
+                required: ['title', 'latitude', 'longitude', 'proximity'],
+              },
+            },
+          },
+        },
+        clearAlarms: {
+          type: 'boolean',
+          description: 'Set to true to remove all alarms from the reminder.',
         },
         targetList: {
           type: 'string',
@@ -116,10 +182,6 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
           type: 'string',
           enum: ['high', 'medium', 'low', 'none'],
           description: 'Filter reminders by priority level.',
-        },
-        filterFlagged: {
-          type: 'boolean',
-          description: 'Filter to only show flagged reminders when true.',
         },
         filterRecurring: {
           type: 'boolean',
@@ -171,6 +233,55 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
             },
           },
           required: ['frequency'],
+        },
+        recurrenceRules: {
+          type: 'array',
+          description:
+            'Recurrence rules for repeating reminders (EKCalendarItem.recurrenceRules).',
+          items: {
+            type: 'object',
+            properties: {
+              frequency: {
+                type: 'string',
+                enum: ['daily', 'weekly', 'monthly', 'yearly'],
+                description: 'How often the reminder repeats.',
+              },
+              interval: {
+                type: 'integer',
+                description:
+                  'Interval between occurrences (e.g., 2 for every 2 weeks). Defaults to 1.',
+                default: 1,
+              },
+              endDate: {
+                type: 'string',
+                description:
+                  'When the recurrence ends (YYYY-MM-DD format). Optional.',
+              },
+              occurrenceCount: {
+                type: 'integer',
+                description:
+                  'Number of times to repeat (e.g., 10 for repeat 10 times). Optional.',
+              },
+              daysOfWeek: {
+                type: 'array',
+                items: { type: 'integer' },
+                description:
+                  'Days of week for weekly recurrence (1=Sunday, 7=Saturday). Optional.',
+              },
+              daysOfMonth: {
+                type: 'array',
+                items: { type: 'integer' },
+                description:
+                  'Days of month for monthly recurrence (1-31). Optional.',
+              },
+              monthsOfYear: {
+                type: 'array',
+                items: { type: 'integer' },
+                description: 'Months for yearly recurrence (1-12). Optional.',
+              },
+            },
+            required: ['frequency'],
+          },
         },
         clearRecurrence: {
           type: 'boolean',
@@ -351,14 +462,158 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
           type: 'string',
           description: 'Location for the event.',
         },
+        structuredLocation: {
+          type: 'object',
+          description:
+            'Structured location for the event (EKEvent.structuredLocation). If provided, title is required.',
+          properties: {
+            title: {
+              type: 'string',
+              description: 'Location name/title.',
+            },
+            latitude: {
+              type: 'number',
+              description: 'Latitude coordinate of the location.',
+            },
+            longitude: {
+              type: 'number',
+              description: 'Longitude coordinate of the location.',
+            },
+            radius: {
+              type: 'number',
+              description: 'Optional radius in meters.',
+            },
+          },
+          required: ['title'],
+        },
         url: {
           type: 'string',
           description: 'A URL to associate with the event.',
           format: 'uri',
         },
+        availability: {
+          type: 'string',
+          enum: ['not-supported', 'busy', 'free', 'tentative', 'unavailable'],
+          description: 'Event availability (EKEvent.availability).',
+        },
         isAllDay: {
           type: 'boolean',
           description: 'Whether the event is an all-day event.',
+        },
+        alarms: {
+          type: 'array',
+          description:
+            'Alarms for the event (EKCalendarItem.alarms). Each alarm must specify exactly one of relativeOffset (seconds), absoluteDate, or locationTrigger.',
+          items: {
+            type: 'object',
+            properties: {
+              relativeOffset: {
+                type: 'number',
+                description:
+                  'Seconds offset for a relative alarm (negative = before start). Example: -1800 for 30 minutes before.',
+              },
+              absoluteDate: {
+                type: 'string',
+                description:
+                  'Absolute trigger date/time for the alarm. Supports the same formats as startDate.',
+              },
+              locationTrigger: {
+                type: 'object',
+                description:
+                  'Location-based (geofence) alarm. Equivalent to setting EKAlarm.structuredLocation + proximity.',
+                properties: {
+                  title: {
+                    type: 'string',
+                    description:
+                      'Location name/title (e.g., "Home", "Office").',
+                  },
+                  latitude: {
+                    type: 'number',
+                    description: 'Latitude coordinate of the location.',
+                  },
+                  longitude: {
+                    type: 'number',
+                    description: 'Longitude coordinate of the location.',
+                  },
+                  radius: {
+                    type: 'number',
+                    description: 'Geofence radius in meters (default 100).',
+                    default: 100,
+                  },
+                  proximity: {
+                    type: 'string',
+                    enum: ['enter', 'leave'],
+                    description:
+                      'When to trigger: "enter" fires when arriving, "leave" fires when departing.',
+                  },
+                },
+                required: ['title', 'latitude', 'longitude', 'proximity'],
+              },
+            },
+          },
+        },
+        clearAlarms: {
+          type: 'boolean',
+          description: 'Set to true to remove all alarms from the event.',
+        },
+        recurrenceRules: {
+          type: 'array',
+          description:
+            'Recurrence rules for repeating events (EKCalendarItem.recurrenceRules).',
+          items: {
+            type: 'object',
+            properties: {
+              frequency: {
+                type: 'string',
+                enum: ['daily', 'weekly', 'monthly', 'yearly'],
+                description: 'How often the event repeats.',
+              },
+              interval: {
+                type: 'integer',
+                description:
+                  'Interval between occurrences (e.g., 2 for every 2 weeks). Defaults to 1.',
+                default: 1,
+              },
+              endDate: {
+                type: 'string',
+                description:
+                  'When the recurrence ends (YYYY-MM-DD format). Optional.',
+              },
+              occurrenceCount: {
+                type: 'integer',
+                description:
+                  'Number of times to repeat (e.g., 10 for repeat 10 times). Optional.',
+              },
+              daysOfWeek: {
+                type: 'array',
+                items: { type: 'integer' },
+                description:
+                  'Days of week for weekly recurrence (1=Sunday, 7=Saturday). Optional.',
+              },
+              daysOfMonth: {
+                type: 'array',
+                items: { type: 'integer' },
+                description:
+                  'Days of month for monthly recurrence (1-31). Optional.',
+              },
+              monthsOfYear: {
+                type: 'array',
+                items: { type: 'integer' },
+                description: 'Months for yearly recurrence (1-12). Optional.',
+              },
+            },
+            required: ['frequency'],
+          },
+        },
+        clearRecurrence: {
+          type: 'boolean',
+          description: 'Set to true to remove recurrence rules from the event.',
+        },
+        span: {
+          type: 'string',
+          enum: ['this-event', 'future-events'],
+          description:
+            'Scope for changes to recurring events: this-event or future-events.',
         },
         targetCalendar: {
           type: 'string',

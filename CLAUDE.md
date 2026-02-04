@@ -166,4 +166,3 @@ When modifying notes programmatically, preserve existing tags and subtasks unles
 - **Permission handling**: Swift layer manages `EKEventStore.authorizationStatus()`
 - **Binary security**: Path validation in `binaryValidator.ts` restricts allowed binary locations
 - **Date formats**: Prefer `YYYY-MM-DD HH:mm:ss` for local time, ISO 8601 with timezone for UTC
-- **Flagged parameter**: The `flagged` parameter is accepted for API compatibility but has no effect—EventKit does not expose a public `isFlagged` property

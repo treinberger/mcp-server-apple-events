@@ -5,15 +5,19 @@
 
 import { z } from 'zod/v3';
 import {
+  CreateCalendarEventSchema,
   CreateReminderListSchema,
   CreateReminderSchema,
+  DeleteCalendarEventSchema,
   DeleteReminderSchema,
+  ReadCalendarEventsSchema,
   ReadRemindersSchema,
   RequiredListNameSchema,
   SafeDateSchema,
   SafeNoteSchema,
   SafeTextSchema,
   SafeUrlSchema,
+  UpdateCalendarEventSchema,
   UpdateReminderListSchema,
   UpdateReminderSchema,
   ValidationError,
@@ -163,43 +167,6 @@ describe('ValidationSchemas', () => {
       });
     });
 
-    describe('Flagged validation', () => {
-      it('rejects flagged=true in CreateReminderSchema', () => {
-        expect(() =>
-          CreateReminderSchema.parse({
-            title: 'Flagged reminder',
-            flagged: true,
-          }),
-        ).toThrow('Flagged reminders are not supported by EventKit');
-      });
-
-      it('rejects flagged=false in CreateReminderSchema', () => {
-        expect(() =>
-          CreateReminderSchema.parse({
-            title: 'Flagged reminder',
-            flagged: false,
-          }),
-        ).toThrow('Flagged reminders are not supported by EventKit');
-      });
-
-      it('rejects flagged in UpdateReminderSchema', () => {
-        expect(() =>
-          UpdateReminderSchema.parse({
-            id: '123',
-            flagged: true,
-          }),
-        ).toThrow('Flagged reminders are not supported by EventKit');
-      });
-
-      it('allows omitting flagged field', () => {
-        expect(() =>
-          CreateReminderSchema.parse({
-            title: 'Normal reminder',
-          }),
-        ).not.toThrow();
-      });
-    });
-
     describe('Action schemas validation patterns', () => {
       it.each([
         {
@@ -262,6 +229,112 @@ describe('ValidationSchemas', () => {
           delete invalidInput[field];
           expect(() => schema.parse(invalidInput)).toThrow();
         }
+      });
+    });
+
+    describe('Reminders schema alignment', () => {
+      it('CreateReminderSchema keeps EventKit-aligned fields', () => {
+        const parsed = CreateReminderSchema.parse({
+          title: 'Aligned reminder',
+          startDate: '2024-01-15T09:00:00Z',
+          dueDate: '2024-01-15T10:00:00Z',
+          location: 'Office',
+          alarms: [{ relativeOffset: -900 }],
+          recurrenceRules: [
+            { frequency: 'weekly', interval: 1, daysOfWeek: [2, 4] },
+          ],
+        }) as Record<string, unknown>;
+
+        expect(parsed.startDate).toBe('2024-01-15T09:00:00Z');
+        expect(parsed.location).toBe('Office');
+        expect(parsed.alarms).toEqual([{ relativeOffset: -900 }]);
+        expect(parsed.recurrenceRules).toEqual([
+          { frequency: 'weekly', interval: 1, daysOfWeek: [2, 4] },
+        ]);
+      });
+
+      it('UpdateReminderSchema keeps completionDate and other aligned fields', () => {
+        const parsed = UpdateReminderSchema.parse({
+          id: 'rem-1',
+          completed: true,
+          completionDate: '2024-01-16T10:00:00Z',
+          startDate: '2024-01-15T09:00:00Z',
+          dueDate: '2024-01-15T10:00:00Z',
+          location: 'Office',
+          alarms: [{ absoluteDate: '2024-01-15T10:15:00Z' }],
+          recurrenceRules: [
+            { frequency: 'monthly', interval: 1, daysOfMonth: [1, 15] },
+          ],
+        }) as Record<string, unknown>;
+
+        expect(parsed.completionDate).toBe('2024-01-16T10:00:00Z');
+        expect(parsed.startDate).toBe('2024-01-15T09:00:00Z');
+        expect(parsed.location).toBe('Office');
+        expect(parsed.alarms).toEqual([
+          { absoluteDate: '2024-01-15T10:15:00Z' },
+        ]);
+        expect(parsed.recurrenceRules).toEqual([
+          { frequency: 'monthly', interval: 1, daysOfMonth: [1, 15] },
+        ]);
+      });
+    });
+
+    describe('Calendar schema alignment', () => {
+      it('CreateCalendarEventSchema keeps alarms/recurrenceRules/availability/structuredLocation', () => {
+        const parsed = CreateCalendarEventSchema.parse({
+          title: 'Aligned event',
+          startDate: '2025-11-04T09:00:00+08:00',
+          endDate: '2025-11-04T10:00:00+08:00',
+          availability: 'busy',
+          alarms: [{ relativeOffset: -1800 }],
+          recurrenceRules: [
+            { frequency: 'weekly', interval: 1, daysOfWeek: [2] },
+          ],
+          structuredLocation: { title: 'Office', latitude: 1, longitude: 2 },
+        }) as Record<string, unknown>;
+
+        expect(parsed.availability).toBe('busy');
+        expect(parsed.alarms).toEqual([{ relativeOffset: -1800 }]);
+        expect(parsed.recurrenceRules).toEqual([
+          { frequency: 'weekly', interval: 1, daysOfWeek: [2] },
+        ]);
+        expect(parsed.structuredLocation).toEqual({
+          title: 'Office',
+          latitude: 1,
+          longitude: 2,
+        });
+      });
+
+      it('UpdateCalendarEventSchema keeps span for recurring changes', () => {
+        const parsed = UpdateCalendarEventSchema.parse({
+          id: 'evt-1',
+          span: 'future-events',
+        }) as Record<string, unknown>;
+        expect(parsed.span).toBe('future-events');
+      });
+
+      it('UpdateCalendarEventSchema allows clearing structuredLocation', () => {
+        const parsed = UpdateCalendarEventSchema.parse({
+          id: 'evt-1',
+          structuredLocation: null,
+        }) as Record<string, unknown>;
+
+        expect(parsed.structuredLocation).toBeNull();
+      });
+
+      it('DeleteCalendarEventSchema keeps span for recurring deletes', () => {
+        const parsed = DeleteCalendarEventSchema.parse({
+          id: 'evt-1',
+          span: 'future-events',
+        }) as Record<string, unknown>;
+        expect(parsed.span).toBe('future-events');
+      });
+
+      it('ReadCalendarEventsSchema keeps availability filter', () => {
+        const parsed = ReadCalendarEventsSchema.parse({
+          availability: 'free',
+        }) as Record<string, unknown>;
+        expect(parsed.availability).toBe('free');
       });
     });
 

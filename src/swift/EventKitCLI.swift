@@ -37,11 +37,40 @@ struct ReminderJSON: Codable {
     let list: String
     let notes: String?
     let url: String?
+    let location: String?
+    let timeZone: String?
     let dueDate: String?
+    let startDate: String?
+    let completionDate: String?
+    let creationDate: String?
+    let lastModifiedDate: String?
+    let externalId: String?
     let priority: Int
-    let isFlagged: Bool = false  // Not available in EventKit public API
-    let recurrence: RecurrenceRuleJSON?
+    let alarms: [AlarmJSON]?
+    let recurrenceRules: [RecurrenceRuleJSON]?
     let locationTrigger: LocationTriggerJSON?
+}
+
+struct StructuredLocationJSON: Codable {
+    let title: String
+    let latitude: Double?
+    let longitude: Double?
+    let radius: Double?
+}
+
+struct AlarmJSON: Codable {
+    let relativeOffset: Double?
+    let absoluteDate: String?
+    let locationTrigger: LocationTriggerJSON?
+}
+
+struct ParticipantJSON: Codable {
+    let name: String?
+    let url: String
+    let status: String?
+    let role: String?
+    let type: String?
+    let isCurrentUser: Bool?
 }
 
 // MARK: - Location Trigger Models
@@ -96,6 +125,102 @@ private func locationTriggerToJSON(_ alarm: EKAlarm) -> LocationTriggerJSON? {
     )
 }
 
+private func structuredLocationFromTrigger(_ trigger: LocationTriggerJSON) -> (EKStructuredLocation, EKAlarmProximity) {
+    let structuredLocation = EKStructuredLocation(title: trigger.title)
+    structuredLocation.geoLocation = CLLocation(latitude: trigger.latitude, longitude: trigger.longitude)
+    structuredLocation.radius = trigger.radius > 0 ? trigger.radius : 100
+
+    let proximity: EKAlarmProximity
+    switch trigger.proximity.lowercased() {
+    case "leave", "depart", "exit":
+        proximity = .leave
+    default:
+        proximity = .enter
+    }
+
+    return (structuredLocation, proximity)
+}
+
+private func parseStructuredLocation(from json: String) -> EKStructuredLocation? {
+    guard let data = json.data(using: .utf8),
+          let location = try? JSONDecoder().decode(StructuredLocationJSON.self, from: data) else {
+        return nil
+    }
+
+    let structuredLocation = EKStructuredLocation(title: location.title)
+    if let lat = location.latitude, let lon = location.longitude {
+        structuredLocation.geoLocation = CLLocation(latitude: lat, longitude: lon)
+    }
+    if let radius = location.radius, radius > 0 {
+        structuredLocation.radius = radius
+    }
+    return structuredLocation
+}
+
+private func structuredLocationToJSON(_ structuredLocation: EKStructuredLocation?) -> StructuredLocationJSON? {
+    guard let structuredLocation = structuredLocation else { return nil }
+    let geo = structuredLocation.geoLocation
+    return StructuredLocationJSON(
+        title: structuredLocation.title ?? "Location",
+        latitude: geo?.coordinate.latitude,
+        longitude: geo?.coordinate.longitude,
+        radius: structuredLocation.radius > 0 ? structuredLocation.radius : nil
+    )
+}
+
+private func alarmToJSON(_ alarm: EKAlarm, preferredTimeZone: TimeZone) -> AlarmJSON {
+    if let structured = locationTriggerToJSON(alarm) {
+        return AlarmJSON(relativeOffset: nil, absoluteDate: nil, locationTrigger: structured)
+    }
+
+    if let absolute = alarm.absoluteDate {
+        return AlarmJSON(
+            relativeOffset: nil,
+            absoluteDate: formatEventDate(absolute, preferredTimeZone: preferredTimeZone, includeTime: true),
+            locationTrigger: nil
+        )
+    }
+
+    // relativeOffset is valid when absoluteDate is nil and no structuredLocation alarm is set
+    return AlarmJSON(relativeOffset: alarm.relativeOffset, absoluteDate: nil, locationTrigger: nil)
+}
+
+private func parseAlarms(from json: String, dateParser: (String) -> Date?) -> [EKAlarm]? {
+    guard let data = json.data(using: .utf8),
+          let alarms = try? JSONDecoder().decode([AlarmJSON].self, from: data) else {
+        return nil
+    }
+
+    var result: [EKAlarm] = []
+    for alarmJSON in alarms {
+        if let trigger = alarmJSON.locationTrigger {
+            let (structuredLocation, proximity) = structuredLocationFromTrigger(trigger)
+            let alarm = EKAlarm()
+            alarm.structuredLocation = structuredLocation
+            alarm.proximity = proximity
+            result.append(alarm)
+            continue
+        }
+
+        if let absoluteDateStr = alarmJSON.absoluteDate,
+           let date = dateParser(absoluteDateStr) {
+            let alarm = EKAlarm()
+            alarm.absoluteDate = date
+            result.append(alarm)
+            continue
+        }
+
+        if let offset = alarmJSON.relativeOffset {
+            let alarm = EKAlarm()
+            alarm.relativeOffset = offset
+            result.append(alarm)
+            continue
+        }
+    }
+
+    return result
+}
+
 // MARK: - Recurrence Rule Models
 struct RecurrenceRuleJSON: Codable {
     let frequency: String  // daily, weekly, monthly, yearly
@@ -107,12 +232,7 @@ struct RecurrenceRuleJSON: Codable {
     let monthsOfYear: [Int]?   // 1-12
 }
 
-private func parseRecurrenceRule(from json: String) -> EKRecurrenceRule? {
-    guard let data = json.data(using: .utf8),
-          let rule = try? JSONDecoder().decode(RecurrenceRuleJSON.self, from: data) else {
-        return nil
-    }
-
+private func recurrenceRuleFromJSON(_ rule: RecurrenceRuleJSON) -> EKRecurrenceRule? {
     let frequency: EKRecurrenceFrequency
     switch rule.frequency.lowercased() {
     case "daily": frequency = .daily
@@ -162,6 +282,29 @@ private func parseRecurrenceRule(from json: String) -> EKRecurrenceRule? {
         setPositions: nil,
         end: recurrenceEnd
     )
+}
+
+private func parseRecurrenceRule(from json: String) -> EKRecurrenceRule? {
+    guard let data = json.data(using: .utf8),
+          let rule = try? JSONDecoder().decode(RecurrenceRuleJSON.self, from: data) else {
+        return nil
+    }
+    return recurrenceRuleFromJSON(rule)
+}
+
+private func parseRecurrenceRules(from json: String) -> [EKRecurrenceRule]? {
+    guard let data = json.data(using: .utf8) else { return nil }
+
+    if let rules = try? JSONDecoder().decode([RecurrenceRuleJSON].self, from: data) {
+        return rules.compactMap { recurrenceRuleFromJSON($0) }
+    }
+
+    if let rule = try? JSONDecoder().decode(RecurrenceRuleJSON.self, from: data),
+       let ek = recurrenceRuleFromJSON(rule) {
+        return [ek]
+    }
+
+    return nil
 }
 
 private func recurrenceRuleToJSON(_ ekRule: EKRecurrenceRule) -> RecurrenceRuleJSON? {
@@ -223,8 +366,20 @@ struct EventJSON: Codable {
     let endDate: String
     let notes: String?
     let location: String?
+    let structuredLocation: StructuredLocationJSON?
     let url: String?
     let isAllDay: Bool
+    let availability: String?
+    let alarms: [AlarmJSON]?
+    let recurrenceRules: [RecurrenceRuleJSON]?
+    let organizer: ParticipantJSON?
+    let attendees: [ParticipantJSON]?
+    let status: String?
+    let isDetached: Bool?
+    let occurrenceDate: String?
+    let creationDate: String?
+    let lastModifiedDate: String?
+    let externalId: String?
 }
 
 struct CalendarJSON: Codable {
@@ -462,29 +617,24 @@ class RemindersManager {
         return filtered.map { $0.toJSON() }
     }
 
-    func createReminder(title: String, listName: String?, notes: String?, urlString: String?, dueDateString: String?, priority: Int?, recurrenceJSON: String?, locationTriggerJSON: String?) throws -> ReminderJSON {
+    func createReminder(title: String, listName: String?, notes: String?, location: String?, urlString: String?, startDateString: String?, dueDateString: String?, priority: Int?, alarmsJSON: String?, recurrenceRulesJSON: String?, locationTriggerJSON: String?) throws -> ReminderJSON {
         let reminder = EKReminder(eventStore: eventStore)
         reminder.calendar = try findList(named: listName)
         reminder.title = title
+        if let location = location {
+            reminder.location = location.isEmpty ? nil : location
+        }
 
         // Set priority (0=none, 1=high, 5=medium, 9=low)
         if let p = priority {
             reminder.priority = max(0, min(9, p))
         }
 
-        // Note: isFlagged is not available in EventKit public API
-
-        // Set recurrence rule
-        if let recJSON = recurrenceJSON, let recRule = parseRecurrenceRule(from: recJSON) {
-            reminder.addRecurrenceRule(recRule)
-        }
-
-        // Set location trigger (geofence alarm)
-        if let locJSON = locationTriggerJSON, let (structuredLocation, proximity) = parseLocationTrigger(from: locJSON) {
-            let alarm = EKAlarm()
-            alarm.structuredLocation = structuredLocation
-            alarm.proximity = proximity
-            reminder.addAlarm(alarm)
+        // Set recurrence rules
+        if let recJSON = recurrenceRulesJSON, let rules = parseRecurrenceRules(from: recJSON) {
+            for rule in rules {
+                reminder.addRecurrenceRule(rule)
+            }
         }
 
         // Handle URL: store in both URL field and append to notes
@@ -503,22 +653,55 @@ class RemindersManager {
         }
         if let finalNotes = finalNotes { reminder.notes = finalNotes }
 
+        var startTz: TimeZone?
+        if let startStr = startDateString {
+            if let parsedComponents = parseDateComponents(from: startStr) {
+                reminder.startDateComponents = parsedComponents
+                startTz = parsedComponents.timeZone
+            } else {
+                reminder.startDateComponents = nil
+            }
+        }
+
+        var dueTz: TimeZone?
         if let dateStr = dueDateString {
             if let parsedComponents = parseDateComponents(from: dateStr) {
                 reminder.dueDateComponents = parsedComponents
-                reminder.timeZone = parsedComponents.timeZone
+                dueTz = parsedComponents.timeZone
             } else {
                 reminder.dueDateComponents = nil
-                reminder.timeZone = nil
             }
         }
+
+        if let startTz = startTz, let dueTz = dueTz, startTz.identifier != dueTz.identifier {
+            throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Reminder start and due dates have different timezones (\(startTz.identifier) vs \(dueTz.identifier)). EventKit reminders support only one timezone. Please use the same timezone for both."])
+        }
+        reminder.timeZone = startTz ?? dueTz
+
+        // Set alarms
+        if let alarmsJSON = alarmsJSON, let alarms = parseAlarms(from: alarmsJSON, dateParser: self.parseDate(from:)) {
+            for alarm in alarms {
+                reminder.addAlarm(alarm)
+            }
+        } else if let locJSON = locationTriggerJSON, let trigger = try? JSONDecoder().decode(LocationTriggerJSON.self, from: Data(locJSON.utf8)) {
+            // Back-compat: single location trigger
+            let (structuredLocation, proximity) = structuredLocationFromTrigger(trigger)
+            let alarm = EKAlarm()
+            alarm.structuredLocation = structuredLocation
+            alarm.proximity = proximity
+            reminder.addAlarm(alarm)
+        }
+
         try eventStore.save(reminder, commit: true)
         return reminder.toJSON()
     }
 
-    func updateReminder(id: String, newTitle: String?, listName: String?, notes: String?, urlString: String?, isCompleted: Bool?, dueDateString: String?, priority: Int?, recurrenceJSON: String?, clearRecurrence: Bool?, locationTriggerJSON: String?, clearLocationTrigger: Bool?) throws -> ReminderJSON {
+    func updateReminder(id: String, newTitle: String?, listName: String?, notes: String?, location: String?, urlString: String?, isCompleted: Bool?, completionDateString: String?, startDateString: String?, dueDateString: String?, priority: Int?, alarmsJSON: String?, clearAlarms: Bool?, recurrenceRulesJSON: String?, clearRecurrence: Bool?, locationTriggerJSON: String?, clearLocationTrigger: Bool?) throws -> ReminderJSON {
         guard let reminder = findReminder(withId: id) else { throw NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "ID '\(id)' not found."]) }
         if let newTitle = newTitle { reminder.title = newTitle }
+        if let location = location {
+            reminder.location = location.isEmpty ? nil : location
+        }
 
         // Handle URL: store in both URL field and append to notes
         var finalNotes: String?
@@ -557,6 +740,12 @@ class RemindersManager {
 
         if let finalNotes = finalNotes { reminder.notes = finalNotes }
 
+        if let completionDateStr = completionDateString, let parsed = parseDate(from: completionDateStr) {
+            reminder.completionDate = parsed
+        } else if completionDateString != nil {
+            throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid completionDate format."])
+        }
+
         if let isCompleted = isCompleted { reminder.isCompleted = isCompleted }
 
         // Update priority (0=none, 1=high, 5=medium, 9=low)
@@ -564,24 +753,28 @@ class RemindersManager {
             reminder.priority = max(0, min(9, p))
         }
 
-        // Note: isFlagged is not available in EventKit public API
-
-        // Update recurrence rule
+        // Update recurrence rules
         if clearRecurrence == true {
-            // Remove all existing recurrence rules
             if let rules = reminder.recurrenceRules {
-                for rule in rules {
-                    reminder.removeRecurrenceRule(rule)
-                }
+                for rule in rules { reminder.removeRecurrenceRule(rule) }
             }
-        } else if let recJSON = recurrenceJSON, let recRule = parseRecurrenceRule(from: recJSON) {
-            // Remove existing rules and add new one
+        } else if let recJSON = recurrenceRulesJSON, let newRules = parseRecurrenceRules(from: recJSON) {
             if let rules = reminder.recurrenceRules {
-                for rule in rules {
-                    reminder.removeRecurrenceRule(rule)
-                }
+                for rule in rules { reminder.removeRecurrenceRule(rule) }
             }
-            reminder.addRecurrenceRule(recRule)
+            for rule in newRules { reminder.addRecurrenceRule(rule) }
+        }
+
+        // Update alarms
+        if clearAlarms == true {
+            if let alarms = reminder.alarms {
+                for alarm in alarms { reminder.removeAlarm(alarm) }
+            }
+        } else if let alarmsJSON = alarmsJSON, let alarms = parseAlarms(from: alarmsJSON, dateParser: self.parseDate(from:)) {
+            if let existing = reminder.alarms {
+                for alarm in existing { reminder.removeAlarm(alarm) }
+            }
+            for alarm in alarms { reminder.addAlarm(alarm) }
         }
 
         // Update location trigger
@@ -606,15 +799,34 @@ class RemindersManager {
         }
 
         if let listName = listName { reminder.calendar = try findList(named: listName) }
+
+        var startTz: TimeZone?
+        if let startStr = startDateString {
+            if let parsedComponents = parseDateComponents(from: startStr) {
+                reminder.startDateComponents = parsedComponents
+                startTz = parsedComponents.timeZone
+            } else {
+                reminder.startDateComponents = nil
+            }
+        }
+
+        var dueTz: TimeZone?
         if let dateStr = dueDateString {
             if let parsedComponents = parseDateComponents(from: dateStr) {
                 reminder.dueDateComponents = parsedComponents
-                reminder.timeZone = parsedComponents.timeZone
+                dueTz = parsedComponents.timeZone
             } else {
                 reminder.dueDateComponents = nil
-                reminder.timeZone = nil
             }
         }
+
+        if let startTz = startTz, let dueTz = dueTz, startTz.identifier != dueTz.identifier {
+            throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Reminder start and due dates have different timezones (\(startTz.identifier) vs \(dueTz.identifier)). EventKit reminders support only one timezone. Please use the same timezone for both."])
+        }
+        if startTz != nil || dueTz != nil {
+            reminder.timeZone = startTz ?? dueTz
+        }
+
         try eventStore.save(reminder, commit: true)
         return reminder.toJSON()
     }
@@ -661,7 +873,7 @@ class RemindersManager {
         return eventStore.calendars(for: .event).map { $0.toCalendarJSON() }
     }
     
-    func getEvents(startDate: Date?, endDate: Date?, calendarName: String?, search: String?) throws -> [EventJSON] {
+    func getEvents(startDate: Date?, endDate: Date?, calendarName: String?, search: String?, availability: String?) throws -> [EventJSON] {
         let calendars = calendarName != nil ? [try findCalendar(named: calendarName)] : eventStore.calendars(for: .event)
         let predicate = eventStore.predicateForEvents(withStart: startDate ?? Date.distantPast, end: endDate ?? Date.distantFuture, calendars: calendars)
         
@@ -675,11 +887,15 @@ class RemindersManager {
                 ($0.location?.lowercased().contains(searchTerm) ?? false)
             }
         }
+
+        if let availability = availability {
+            filtered = filtered.filter { eventAvailabilityToString($0.availability) == availability }
+        }
         
         return filtered.map { $0.toJSON() }
     }
     
-    func createEvent(title: String, calendarName: String?, startDateString: String, endDateString: String, notes: String?, location: String?, urlString: String?, isAllDay: Bool?) throws -> EventJSON {
+    func createEvent(title: String, calendarName: String?, startDateString: String, endDateString: String, notes: String?, location: String?, structuredLocationJSON: String?, urlString: String?, isAllDay: Bool?, availability: String?, alarmsJSON: String?, recurrenceRulesJSON: String?) throws -> EventJSON {
         let event = EKEvent(eventStore: eventStore)
         event.calendar = try findCalendar(named: calendarName)
         event.title = title
@@ -699,8 +915,34 @@ class RemindersManager {
         
         if let notesStr = notes { event.notes = notesStr }
         if let locationStr = location { event.location = locationStr }
+        if let structuredLocationJSON = structuredLocationJSON,
+           let structured = parseStructuredLocation(from: structuredLocationJSON) {
+            event.structuredLocation = structured
+        }
         if let urlStr = urlString, !urlStr.isEmpty, let url = URL(string: urlStr) {
             event.url = url
+        }
+        if let availability = availability {
+            switch availability.lowercased() {
+            case "busy":
+                event.availability = .busy
+            case "free":
+                event.availability = .free
+            case "tentative":
+                event.availability = .tentative
+            case "unavailable":
+                event.availability = .unavailable
+            default:
+                break
+            }
+        }
+
+        if let alarmsJSON = alarmsJSON, let alarms = parseAlarms(from: alarmsJSON, dateParser: self.parseDate(from:)) {
+            event.alarms = alarms
+        }
+
+        if let recurrenceRulesJSON = recurrenceRulesJSON, let rules = parseRecurrenceRules(from: recurrenceRulesJSON) {
+            event.recurrenceRules = rules
         }
         
         do {
@@ -718,7 +960,7 @@ class RemindersManager {
         return eventStore.event(withIdentifier: id)
     }
     
-    func updateEvent(id: String, title: String?, calendarName: String?, startDateString: String?, endDateString: String?, notes: String?, location: String?, urlString: String?, isAllDay: Bool?) throws -> EventJSON {
+    func updateEvent(id: String, title: String?, calendarName: String?, startDateString: String?, endDateString: String?, notes: String?, location: String?, structuredLocationJSON: String?, urlString: String?, isAllDay: Bool?, availability: String?, alarmsJSON: String?, clearAlarms: Bool?, recurrenceRulesJSON: String?, clearRecurrence: Bool?, span: String?) throws -> EventJSON {
         guard let event = findEvent(withId: id) else {
             throw NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "Event with ID '\(id)' not found."])
         }
@@ -759,6 +1001,13 @@ class RemindersManager {
         
         if let notesStr = notes { event.notes = notesStr }
         if let locationStr = location { event.location = locationStr }
+        if let structuredLocationJSON = structuredLocationJSON {
+            if structuredLocationJSON.isEmpty {
+                event.structuredLocation = nil
+            } else if let structured = parseStructuredLocation(from: structuredLocationJSON) {
+                event.structuredLocation = structured
+            }
+        }
         if let urlStr = urlString {
             if urlStr.isEmpty {
                 event.url = nil
@@ -767,16 +1016,46 @@ class RemindersManager {
             }
         }
         if let allDay = isAllDay { event.isAllDay = allDay }
+
+        if let availability = availability {
+            switch availability.lowercased() {
+            case "busy":
+                event.availability = .busy
+            case "free":
+                event.availability = .free
+            case "tentative":
+                event.availability = .tentative
+            case "unavailable":
+                event.availability = .unavailable
+            default:
+                break
+            }
+        }
+
+        if clearAlarms == true {
+            event.alarms = []
+        } else if let alarmsJSON = alarmsJSON, let alarms = parseAlarms(from: alarmsJSON, dateParser: self.parseDate(from:)) {
+            event.alarms = alarms
+        }
+
+        if clearRecurrence == true {
+            event.recurrenceRules = []
+        } else if let recurrenceRulesJSON = recurrenceRulesJSON, let rules = parseRecurrenceRules(from: recurrenceRulesJSON) {
+            event.recurrenceRules = rules
+        }
+
+        let saveSpan: EKSpan = (span?.lowercased() == "future-events") ? .futureEvents : .thisEvent
         
-        try eventStore.save(event, span: .thisEvent, commit: true)
+        try eventStore.save(event, span: saveSpan, commit: true)
         return event.toJSON()
     }
     
-    func deleteEvent(id: String) throws {
+    func deleteEvent(id: String, span: String?) throws {
         guard let event = findEvent(withId: id) else {
             throw NSError(domain: "", code: 404, userInfo: [NSLocalizedDescriptionKey: "Event with ID '\(id)' not found."])
         }
-        try eventStore.remove(event, span: .thisEvent, commit: true)
+        let removeSpan: EKSpan = (span?.lowercased() == "future-events") ? .futureEvents : .thisEvent
+        try eventStore.remove(event, span: removeSpan, commit: true)
     }
     
     func parseDate(from dateString: String) -> Date? {
@@ -827,15 +1106,21 @@ private func formatDueDateWithTimezone(from dateComponents: DateComponents?, tim
 // MARK: - Extensions & Main
 extension EKReminder {
     func toJSON() -> ReminderJSON {
-        // Get first recurrence rule if any
-        let recurrenceRule: RecurrenceRuleJSON? = {
-            guard let rules = self.recurrenceRules, let firstRule = rules.first else {
-                return nil
-            }
-            return recurrenceRuleToJSON(firstRule)
+        let preferredTimeZone = self.timeZone ?? TimeZone.current
+
+        let recurrenceRules: [RecurrenceRuleJSON]? = {
+            guard let rules = self.recurrenceRules else { return nil }
+            let mapped = rules.compactMap { recurrenceRuleToJSON($0) }
+            return mapped.isEmpty ? nil : mapped
         }()
 
-        // Get first location-based alarm if any
+        let alarms: [AlarmJSON]? = {
+            guard let alarms = self.alarms else { return nil }
+            let mapped = alarms.map { alarmToJSON($0, preferredTimeZone: preferredTimeZone) }
+            return mapped.isEmpty ? nil : mapped
+        }()
+
+        // Convenience: first location-based alarm if any
         let locationTrigger: LocationTriggerJSON? = {
             guard let alarms = self.alarms else { return nil }
             for alarm in alarms {
@@ -853,10 +1138,17 @@ extension EKReminder {
             list: self.calendar.title,
             notes: self.notes,
             url: self.url?.absoluteString,
+            location: self.location,
+            timeZone: self.timeZone?.identifier,
             dueDate: formatDueDateWithTimezone(from: self.dueDateComponents, timeZoneHint: self.timeZone),
+            startDate: formatDueDateWithTimezone(from: self.startDateComponents, timeZoneHint: self.timeZone),
+            completionDate: self.completionDate.map { formatEventDate($0, preferredTimeZone: preferredTimeZone, includeTime: true) },
+            creationDate: self.creationDate.map { formatEventDate($0, preferredTimeZone: preferredTimeZone, includeTime: true) },
+            lastModifiedDate: self.lastModifiedDate.map { formatEventDate($0, preferredTimeZone: preferredTimeZone, includeTime: true) },
+            externalId: self.calendarItemExternalIdentifier,
             priority: self.priority,
-            // isFlagged is not available in EventKit public API - always returns false
-            recurrence: recurrenceRule,
+            alarms: alarms,
+            recurrenceRules: recurrenceRules,
             locationTrigger: locationTrigger
         )
     }
@@ -880,10 +1172,90 @@ private func formatEventDate(_ date: Date, preferredTimeZone: TimeZone, includeT
     return formatter.string(from: date)
 }
 
+private func eventAvailabilityToString(_ availability: EKEventAvailability) -> String {
+    switch availability {
+    case .notSupported: return "not-supported"
+    case .busy: return "busy"
+    case .free: return "free"
+    case .tentative: return "tentative"
+    case .unavailable: return "unavailable"
+    @unknown default: return "unknown"
+    }
+}
+
+private func eventStatusToString(_ status: EKEventStatus) -> String {
+    switch status {
+    case .none: return "none"
+    case .confirmed: return "confirmed"
+    case .tentative: return "tentative"
+    case .canceled: return "canceled"
+    @unknown default: return "unknown"
+    }
+}
+
+private func participantStatusToString(_ status: EKParticipantStatus) -> String {
+    switch status {
+    case .unknown: return "unknown"
+    case .pending: return "pending"
+    case .accepted: return "accepted"
+    case .declined: return "declined"
+    case .tentative: return "tentative"
+    case .delegated: return "delegated"
+    case .completed: return "completed"
+    case .inProcess: return "in-process"
+    @unknown default: return "unknown"
+    }
+}
+
+private func participantRoleToString(_ role: EKParticipantRole) -> String {
+    switch role {
+    case .unknown: return "unknown"
+    case .required: return "required"
+    case .optional: return "optional"
+    case .chair: return "chair"
+    case .nonParticipant: return "non-participant"
+    @unknown default: return "unknown"
+    }
+}
+
+private func participantTypeToString(_ type: EKParticipantType) -> String {
+    switch type {
+    case .unknown: return "unknown"
+    case .person: return "person"
+    case .room: return "room"
+    case .resource: return "resource"
+    case .group: return "group"
+    @unknown default: return "unknown"
+    }
+}
+
+private func participantToJSON(_ participant: EKParticipant) -> ParticipantJSON {
+    return ParticipantJSON(
+        name: participant.name,
+        url: participant.url.absoluteString,
+        status: participantStatusToString(participant.participantStatus),
+        role: participantRoleToString(participant.participantRole),
+        type: participantTypeToString(participant.participantType),
+        isCurrentUser: participant.isCurrentUser
+    )
+}
+
 extension EKEvent {
     func toJSON() -> EventJSON {
         let eventTimeZone = self.timeZone ?? TimeZone.current
         let includeTime = !self.isAllDay
+
+        let alarms: [AlarmJSON]? = {
+            guard let alarms = self.alarms else { return nil }
+            let mapped = alarms.map { alarmToJSON($0, preferredTimeZone: eventTimeZone) }
+            return mapped.isEmpty ? nil : mapped
+        }()
+
+        let recurrenceRules: [RecurrenceRuleJSON]? = {
+            guard let rules = self.recurrenceRules else { return nil }
+            let mapped = rules.compactMap { recurrenceRuleToJSON($0) }
+            return mapped.isEmpty ? nil : mapped
+        }()
 
         return EventJSON(
             id: self.eventIdentifier,
@@ -893,8 +1265,20 @@ extension EKEvent {
             endDate: formatEventDate(self.endDate, preferredTimeZone: eventTimeZone, includeTime: includeTime),
             notes: self.notes,
             location: self.location,
+            structuredLocation: structuredLocationToJSON(self.structuredLocation),
             url: self.url?.absoluteString,
-            isAllDay: self.isAllDay
+            isAllDay: self.isAllDay,
+            availability: eventAvailabilityToString(self.availability),
+            alarms: alarms,
+            recurrenceRules: recurrenceRules,
+            organizer: self.organizer.map { participantToJSON($0) },
+            attendees: self.attendees?.map { participantToJSON($0) },
+            status: eventStatusToString(self.status),
+            isDetached: self.isDetached,
+            occurrenceDate: self.occurrenceDate.map { formatEventDate($0, preferredTimeZone: eventTimeZone, includeTime: true) },
+            creationDate: self.creationDate.map { formatEventDate($0, preferredTimeZone: eventTimeZone, includeTime: true) },
+            lastModifiedDate: self.lastModifiedDate.map { formatEventDate($0, preferredTimeZone: eventTimeZone, includeTime: true) },
+            externalId: self.calendarItemExternalIdentifier
         )
     }
 }
@@ -1012,11 +1396,41 @@ func main() {
                 print(String(data: try encoder.encode(StandardOutput(result: manager.getLists())), encoding: .utf8)!)
             case "create":
                 guard let title = parser.get("title") else { throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "--title required."]) }
-                let reminder = try manager.createReminder(title: title, listName: parser.get("targetList"), notes: parser.get("note"), urlString: parser.get("url"), dueDateString: parser.get("dueDate"), priority: parser.get("priority").flatMap { Int($0) }, recurrenceJSON: parser.get("recurrence"), locationTriggerJSON: parser.get("locationTrigger"))
+                let reminder = try manager.createReminder(
+                    title: title,
+                    listName: parser.get("targetList"),
+                    notes: parser.get("note"),
+                    location: parser.get("location"),
+                    urlString: parser.get("url"),
+                    startDateString: parser.get("startDate"),
+                    dueDateString: parser.get("dueDate"),
+                    priority: parser.get("priority").flatMap { Int($0) },
+                    alarmsJSON: parser.get("alarms"),
+                    recurrenceRulesJSON: parser.get("recurrenceRules") ?? parser.get("recurrence"),
+                    locationTriggerJSON: parser.get("locationTrigger")
+                )
                 print(String(data: try encoder.encode(StandardOutput(result: reminder)), encoding: .utf8)!)
             case "update":
                 guard let id = parser.get("id") else { throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "--id required."]) }
-                let reminder = try manager.updateReminder(id: id, newTitle: parser.get("title"), listName: parser.get("targetList"), notes: parser.get("note"), urlString: parser.get("url"), isCompleted: parser.get("isCompleted").map { $0 == "true" }, dueDateString: parser.get("dueDate"), priority: parser.get("priority").flatMap { Int($0) }, recurrenceJSON: parser.get("recurrence"), clearRecurrence: parser.get("clearRecurrence").map { $0 == "true" }, locationTriggerJSON: parser.get("locationTrigger"), clearLocationTrigger: parser.get("clearLocationTrigger").map { $0 == "true" })
+                let reminder = try manager.updateReminder(
+                    id: id,
+                    newTitle: parser.get("title"),
+                    listName: parser.get("targetList"),
+                    notes: parser.get("note"),
+                    location: parser.get("location"),
+                    urlString: parser.get("url"),
+                    isCompleted: parser.get("isCompleted").map { $0 == "true" },
+                    completionDateString: parser.get("completionDate"),
+                    startDateString: parser.get("startDate"),
+                    dueDateString: parser.get("dueDate"),
+                    priority: parser.get("priority").flatMap { Int($0) },
+                    alarmsJSON: parser.get("alarms"),
+                    clearAlarms: parser.get("clearAlarms").map { $0 == "true" },
+                    recurrenceRulesJSON: parser.get("recurrenceRules") ?? parser.get("recurrence"),
+                    clearRecurrence: parser.get("clearRecurrence").map { $0 == "true" },
+                    locationTriggerJSON: parser.get("locationTrigger"),
+                    clearLocationTrigger: parser.get("clearLocationTrigger").map { $0 == "true" }
+                )
                 print(String(data: try encoder.encode(StandardOutput(result: reminder)), encoding: .utf8)!)
             case "delete":
                 guard let id = parser.get("id") else { throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "--id required."]) }
@@ -1035,7 +1449,7 @@ func main() {
                 let endDateStr = parser.get("endDate")
                 let startDate = startDateStr != nil ? manager.parseDate(from: startDateStr!) : nil
                 let endDate = endDateStr != nil ? manager.parseDate(from: endDateStr!) : nil
-                let events = try manager.getEvents(startDate: startDate, endDate: endDate, calendarName: parser.get("filterCalendar"), search: parser.get("search"))
+                let events = try manager.getEvents(startDate: startDate, endDate: endDate, calendarName: parser.get("filterCalendar"), search: parser.get("search"), availability: parser.get("availability"))
                 print(String(data: try encoder.encode(StandardOutput(result: EventsReadResult(calendars: manager.getCalendars(), events: events))), encoding: .utf8)!)
             case "read-calendars":
                 print(String(data: try encoder.encode(StandardOutput(result: manager.getCalendars())), encoding: .utf8)!)
@@ -1043,15 +1457,45 @@ func main() {
                 guard let title = parser.get("title") else { throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "--title required."]) }
                 guard let startDate = parser.get("startDate") else { throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "--startDate required."]) }
                 guard let endDate = parser.get("endDate") else { throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "--endDate required."]) }
-                let event = try manager.createEvent(title: title, calendarName: parser.get("targetCalendar"), startDateString: startDate, endDateString: endDate, notes: parser.get("note"), location: parser.get("location"), urlString: parser.get("url"), isAllDay: parser.get("isAllDay").map { $0 == "true" })
+                let event = try manager.createEvent(
+                    title: title,
+                    calendarName: parser.get("targetCalendar"),
+                    startDateString: startDate,
+                    endDateString: endDate,
+                    notes: parser.get("note"),
+                    location: parser.get("location"),
+                    structuredLocationJSON: parser.get("structuredLocation"),
+                    urlString: parser.get("url"),
+                    isAllDay: parser.get("isAllDay").map { $0 == "true" },
+                    availability: parser.get("availability"),
+                    alarmsJSON: parser.get("alarms"),
+                    recurrenceRulesJSON: parser.get("recurrenceRules")
+                )
                 print(String(data: try encoder.encode(StandardOutput(result: event)), encoding: .utf8)!)
             case "update-event":
                 guard let id = parser.get("id") else { throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "--id required."]) }
-                let event = try manager.updateEvent(id: id, title: parser.get("title"), calendarName: parser.get("targetCalendar"), startDateString: parser.get("startDate"), endDateString: parser.get("endDate"), notes: parser.get("note"), location: parser.get("location"), urlString: parser.get("url"), isAllDay: parser.get("isAllDay").map { $0 == "true" })
+                let event = try manager.updateEvent(
+                    id: id,
+                    title: parser.get("title"),
+                    calendarName: parser.get("targetCalendar"),
+                    startDateString: parser.get("startDate"),
+                    endDateString: parser.get("endDate"),
+                    notes: parser.get("note"),
+                    location: parser.get("location"),
+                    structuredLocationJSON: parser.get("structuredLocation"),
+                    urlString: parser.get("url"),
+                    isAllDay: parser.get("isAllDay").map { $0 == "true" },
+                    availability: parser.get("availability"),
+                    alarmsJSON: parser.get("alarms"),
+                    clearAlarms: parser.get("clearAlarms").map { $0 == "true" },
+                    recurrenceRulesJSON: parser.get("recurrenceRules"),
+                    clearRecurrence: parser.get("clearRecurrence").map { $0 == "true" },
+                    span: parser.get("span")
+                )
                 print(String(data: try encoder.encode(StandardOutput(result: event)), encoding: .utf8)!)
             case "delete-event":
                 guard let id = parser.get("id") else { throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "--id required."]) }
-                try manager.deleteEvent(id: id); print(String(data: try encoder.encode(StandardOutput(result: DeleteResult(id: id))), encoding: .utf8)!)
+                try manager.deleteEvent(id: id, span: parser.get("span")); print(String(data: try encoder.encode(StandardOutput(result: DeleteResult(id: id))), encoding: .utf8)!)
             default: throw NSError(domain: "", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid or missing --action."])
             }
         } catch { outputError(error.localizedDescription) }

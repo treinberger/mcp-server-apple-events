@@ -112,7 +112,6 @@ export interface ReminderFilters {
   dueWithin?: DateFilter;
   list?: string;
   priority?: PriorityFilter;
-  flagged?: boolean;
   recurring?: boolean;
   locationBased?: boolean;
   tags?: string[];
@@ -167,17 +166,10 @@ export function applyReminderFilters(
     );
   }
 
-  // Filter by flagged status
-  if (filters.flagged !== undefined && filters.flagged) {
-    filteredReminders = filteredReminders.filter(
-      (reminder) => reminder.isFlagged === true,
-    );
-  }
-
   // Filter by recurring status
   if (filters.recurring !== undefined && filters.recurring) {
     filteredReminders = filteredReminders.filter(
-      (reminder) => reminder.recurrence !== undefined,
+      (reminder) => (reminder.recurrenceRules?.length ?? 0) > 0,
     );
   }
 

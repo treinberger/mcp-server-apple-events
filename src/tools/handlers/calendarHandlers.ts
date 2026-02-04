@@ -33,8 +33,20 @@ const formatEventMarkdown = (event: {
   endDate?: string;
   notes?: string;
   location?: string;
+  structuredLocation?: { title: string; latitude?: number; longitude?: number };
   url?: string;
   isAllDay?: boolean;
+  availability?: string;
+  alarms?: Array<{ relativeOffset?: number; absoluteDate?: string }>;
+  recurrenceRules?: Array<{ frequency: string; interval: number }>;
+  organizer?: { name?: string; url: string };
+  attendees?: Array<{ name?: string; url: string }>;
+  status?: string;
+  isDetached?: boolean;
+  occurrenceDate?: string;
+  creationDate?: string;
+  lastModifiedDate?: string;
+  externalId?: string;
 }): string[] => {
   const lines: string[] = [];
   lines.push(`- ${event.title}`);
@@ -42,8 +54,29 @@ const formatEventMarkdown = (event: {
   if (event.id) lines.push(`  - ID: ${event.id}`);
   if (event.startDate) lines.push(`  - Start: ${event.startDate}`);
   if (event.endDate) lines.push(`  - End: ${event.endDate}`);
-  if (event.isAllDay) lines.push(`  - All Day: ${event.isAllDay}`);
+  if (event.isAllDay !== undefined)
+    lines.push(`  - All Day: ${event.isAllDay}`);
   if (event.location) lines.push(`  - Location: ${event.location}`);
+  if (event.structuredLocation)
+    lines.push(`  - Structured Location: ${event.structuredLocation.title}`);
+  if (event.availability) lines.push(`  - Availability: ${event.availability}`);
+  if (event.alarms && event.alarms.length > 0)
+    lines.push(`  - Alarms: ${event.alarms.length}`);
+  if (event.recurrenceRules && event.recurrenceRules.length > 0)
+    lines.push(`  - Recurrence Rules: ${event.recurrenceRules.length}`);
+  if (event.organizer)
+    lines.push(`  - Organizer: ${event.organizer.name ?? event.organizer.url}`);
+  if (event.attendees && event.attendees.length > 0)
+    lines.push(`  - Attendees: ${event.attendees.length}`);
+  if (event.status) lines.push(`  - Status: ${event.status}`);
+  if (event.isDetached !== undefined)
+    lines.push(`  - Detached: ${event.isDetached}`);
+  if (event.occurrenceDate)
+    lines.push(`  - Occurrence Date: ${event.occurrenceDate}`);
+  if (event.externalId) lines.push(`  - External ID: ${event.externalId}`);
+  if (event.creationDate) lines.push(`  - Created: ${event.creationDate}`);
+  if (event.lastModifiedDate)
+    lines.push(`  - Modified: ${event.lastModifiedDate}`);
   if (event.notes)
     lines.push(`  - Notes: ${formatMultilineNotes(event.notes)}`);
   if (event.url) lines.push(`  - URL: ${event.url}`);
@@ -65,8 +98,12 @@ export const handleCreateCalendarEvent = async (
       calendar: validatedArgs.targetCalendar,
       notes: validatedArgs.note,
       location: validatedArgs.location,
+      structuredLocation: validatedArgs.structuredLocation,
       url: validatedArgs.url,
       isAllDay: validatedArgs.isAllDay,
+      availability: validatedArgs.availability,
+      alarms: validatedArgs.alarms,
+      recurrenceRules: validatedArgs.recurrenceRules,
     });
     return formatSuccessMessage('created', 'event', event.title, event.id);
   }, 'create calendar event');
@@ -88,8 +125,15 @@ export const handleUpdateCalendarEvent = async (
       calendar: validatedArgs.targetCalendar,
       notes: validatedArgs.note,
       location: validatedArgs.location,
+      structuredLocation: validatedArgs.structuredLocation,
       url: validatedArgs.url,
       isAllDay: validatedArgs.isAllDay,
+      availability: validatedArgs.availability,
+      alarms: validatedArgs.alarms,
+      clearAlarms: validatedArgs.clearAlarms,
+      recurrenceRules: validatedArgs.recurrenceRules,
+      clearRecurrence: validatedArgs.clearRecurrence,
+      span: validatedArgs.span,
     });
     return formatSuccessMessage('updated', 'event', event.title, event.id);
   }, 'update calendar event');
@@ -103,7 +147,7 @@ export const handleDeleteCalendarEvent = async (
       args,
       DeleteCalendarEventSchema,
     );
-    await calendarRepository.deleteEvent(validatedArgs.id);
+    await calendarRepository.deleteEvent(validatedArgs.id, validatedArgs.span);
     return formatDeleteMessage('event', validatedArgs.id, {
       useQuotes: true,
       useIdPrefix: true,
@@ -132,6 +176,7 @@ export const handleReadCalendarEvents = async (
       endDate: validatedArgs.endDate,
       calendarName: validatedArgs.filterCalendar,
       search: validatedArgs.search,
+      availability: validatedArgs.availability,
     });
 
     return formatListMarkdown(

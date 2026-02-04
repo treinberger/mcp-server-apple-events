@@ -5,6 +5,7 @@
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
+  type Alarm,
   type LocationTrigger,
   PRIORITY_LABELS,
   type RecurrenceRule,
@@ -157,6 +158,20 @@ const formatRecurrence = (recurrence: RecurrenceRule): string => {
   return parts.join(' ');
 };
 
+const formatRecurrenceRules = (rules: RecurrenceRule[]): string => {
+  if (rules.length === 1) return formatRecurrence(rules[0]);
+  return rules.map((rule) => formatRecurrence(rule)).join('; ');
+};
+
+const formatAlarm = (alarm: Alarm): string => {
+  if (alarm.absoluteDate) return `at ${alarm.absoluteDate}`;
+  if (alarm.relativeOffset !== undefined)
+    return `${alarm.relativeOffset}s from due/start`;
+  if (alarm.locationTrigger)
+    return `on ${formatLocationTrigger(alarm.locationTrigger)}`;
+  return 'unknown';
+};
+
 /**
  * Formats a location trigger for display
  */
@@ -171,15 +186,15 @@ const formatLocationTrigger = (location: LocationTrigger): string => {
  * Builds icon string based on reminder properties
  */
 const buildReminderIcons = (reminder: {
-  isFlagged?: boolean;
   recurrence?: RecurrenceRule;
+  recurrenceRules?: RecurrenceRule[];
   locationTrigger?: LocationTrigger;
   tags?: string[];
   subtasks?: Subtask[];
 }): string => {
   const icons: string[] = [];
-  if (reminder.isFlagged) icons.push('🚩');
-  if (reminder.recurrence) icons.push('🔄');
+  if (reminder.recurrenceRules && reminder.recurrenceRules.length > 0)
+    icons.push('🔄');
   if (reminder.locationTrigger) icons.push('📍');
   if (reminder.tags && reminder.tags.length > 0) icons.push('🏷️');
   if (reminder.subtasks && reminder.subtasks.length > 0) icons.push('📋');
@@ -194,10 +209,17 @@ const formatReminderMarkdown = (reminder: {
   notes?: string;
   dueDate?: string;
   url?: string;
+  location?: string;
   priority?: number;
-  isFlagged?: boolean;
   recurrence?: RecurrenceRule;
+  recurrenceRules?: RecurrenceRule[];
   locationTrigger?: LocationTrigger;
+  alarms?: Alarm[];
+  completionDate?: string;
+  startDate?: string;
+  creationDate?: string;
+  lastModifiedDate?: string;
+  externalId?: string;
   tags?: string[];
   subtasks?: Subtask[];
   subtaskProgress?: { completed: number; total: number; percentage: number };
@@ -212,16 +234,24 @@ const formatReminderMarkdown = (reminder: {
     const priorityLabel = PRIORITY_LABELS[reminder.priority] ?? 'unknown';
     lines.push(`  - Priority: ${priorityLabel} (${reminder.priority})`);
   }
+  if (reminder.startDate) lines.push(`  - Start: ${reminder.startDate}`);
   if (reminder.tags && reminder.tags.length > 0) {
     lines.push(`  - Tags: ${reminder.tags.map((t) => `#${t}`).join(' ')}`);
   }
-  if (reminder.recurrence) {
-    lines.push(`  - Repeats: ${formatRecurrence(reminder.recurrence)}`);
+  const recurrenceRules =
+    reminder.recurrenceRules ??
+    (reminder.recurrence ? [reminder.recurrence] : undefined);
+  if (recurrenceRules && recurrenceRules.length > 0) {
+    lines.push(`  - Repeats: ${formatRecurrenceRules(recurrenceRules)}`);
   }
   if (reminder.locationTrigger) {
     lines.push(
       `  - Location: ${formatLocationTrigger(reminder.locationTrigger)}`,
     );
+  }
+  if (reminder.location) lines.push(`  - Location Text: ${reminder.location}`);
+  if (reminder.alarms && reminder.alarms.length > 0) {
+    lines.push(`  - Alarms: ${reminder.alarms.map(formatAlarm).join('; ')}`);
   }
   if (reminder.subtasks && reminder.subtasks.length > 0) {
     const progress = reminder.subtaskProgress;
@@ -239,7 +269,15 @@ const formatReminderMarkdown = (reminder: {
     lines.push(`  - Notes: ${formatMultilineNotes(cleanNotes)}`);
   }
   if (reminder.dueDate) lines.push(`  - Due: ${reminder.dueDate}`);
+  if (reminder.completionDate)
+    lines.push(`  - Completed: ${reminder.completionDate}`);
   if (reminder.url) lines.push(`  - URL: ${reminder.url}`);
+  if (reminder.externalId)
+    lines.push(`  - External ID: ${reminder.externalId}`);
+  if (reminder.creationDate)
+    lines.push(`  - Created: ${reminder.creationDate}`);
+  if (reminder.lastModifiedDate)
+    lines.push(`  - Modified: ${reminder.lastModifiedDate}`);
   return lines;
 };
 
@@ -263,11 +301,15 @@ export const handleCreateReminder = async (
       title: validatedArgs.title,
       notes: notesWithMetadata,
       url: validatedArgs.url,
+      location: validatedArgs.location,
       list: validatedArgs.targetList,
+      startDate: validatedArgs.startDate,
       dueDate: validatedArgs.dueDate,
       priority: validatedArgs.priority,
-      isFlagged: validatedArgs.flagged,
-      recurrence: validatedArgs.recurrence,
+      alarms: validatedArgs.alarms,
+      recurrenceRules:
+        validatedArgs.recurrenceRules ??
+        (validatedArgs.recurrence ? [validatedArgs.recurrence] : undefined),
       locationTrigger: validatedArgs.locationTrigger,
     });
     return formatSuccessMessage(
@@ -310,12 +352,18 @@ export const handleUpdateReminder = async (
       newTitle: validatedArgs.title,
       notes: notesToSend,
       url: validatedArgs.url,
+      location: validatedArgs.location,
       isCompleted: validatedArgs.completed,
+      completionDate: validatedArgs.completionDate,
       list: validatedArgs.targetList,
+      startDate: validatedArgs.startDate,
       dueDate: validatedArgs.dueDate,
       priority: validatedArgs.priority,
-      isFlagged: validatedArgs.flagged,
-      recurrence: validatedArgs.recurrence,
+      alarms: validatedArgs.alarms,
+      clearAlarms: validatedArgs.clearAlarms,
+      recurrenceRules:
+        validatedArgs.recurrenceRules ??
+        (validatedArgs.recurrence ? [validatedArgs.recurrence] : undefined),
       clearRecurrence: validatedArgs.clearRecurrence,
       locationTrigger: validatedArgs.locationTrigger,
       clearLocationTrigger: validatedArgs.clearLocationTrigger,
@@ -364,7 +412,6 @@ export const handleReadReminders = async (
       search: validatedArgs.search,
       dueWithin: validatedArgs.dueWithin,
       priority: validatedArgs.filterPriority,
-      flagged: validatedArgs.filterFlagged,
       recurring: validatedArgs.filterRecurring,
       locationBased: validatedArgs.filterLocationBased,
       tags: validatedArgs.filterTags,

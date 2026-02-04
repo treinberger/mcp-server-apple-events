@@ -97,10 +97,8 @@ export function combineTagsAndNotes(
   const existingTags = extractTags(notes);
   const cleanNotes = stripTags(notes);
 
-  // Merge existing tags with new tags (deduplicating)
-  const allTags = tags
-    ? [...new Set([...tags, ...existingTags])]
-    : existingTags;
+  const mergedTags = tags ? [...tags, ...existingTags] : existingTags;
+  const allTags = [...new Set(normalizeTags(mergedTags))];
 
   const formattedTags = formatTags(allTags);
 

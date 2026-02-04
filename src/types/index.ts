@@ -54,6 +54,28 @@ export interface LocationTrigger {
 }
 
 /**
+ * Structured location interface (EventKit EKStructuredLocation)
+ */
+export interface StructuredLocation {
+  title: string;
+  latitude?: number;
+  longitude?: number;
+  radius?: number;
+}
+
+/**
+ * Alarm interface (EventKit EKAlarm)
+ * - Relative alarms use seconds offset from start/due dates (negative = before).
+ * - Absolute alarms fire at a specific date/time.
+ * - Location alarms use a structured location + proximity (geofence).
+ */
+export interface Alarm {
+  relativeOffset?: number;
+  absoluteDate?: string;
+  locationTrigger?: LocationTrigger;
+}
+
+/**
  * Subtask interface for checklist items within reminders
  */
 export interface Subtask {
@@ -77,14 +99,21 @@ export interface SubtaskProgress {
 export interface Reminder {
   id: string;
   title: string;
+  startDate?: string;
   dueDate?: string;
+  completionDate?: string;
   notes?: string;
   url?: string; // Native URL field (currently limited by EventKit API)
+  location?: string;
+  timeZone?: string;
+  creationDate?: string;
+  lastModifiedDate?: string;
+  externalId?: string;
   list: string;
   isCompleted: boolean;
   priority: number; // 0=none, 1=high, 5=medium, 9=low
-  isFlagged: boolean;
-  recurrence?: RecurrenceRule;
+  alarms?: Alarm[];
+  recurrenceRules?: RecurrenceRule[];
   locationTrigger?: LocationTrigger;
   tags?: string[]; // Extracted from notes using [#tag] format
   subtasks?: Subtask[]; // Extracted from notes using ---SUBTASKS--- format
@@ -110,8 +139,33 @@ export interface CalendarEvent {
   calendar: string;
   notes?: string;
   location?: string;
+  structuredLocation?: StructuredLocation;
   url?: string;
   isAllDay: boolean;
+  availability?:
+    | 'not-supported'
+    | 'busy'
+    | 'free'
+    | 'tentative'
+    | 'unavailable'
+    | 'unknown';
+  alarms?: Alarm[];
+  recurrenceRules?: RecurrenceRule[];
+  organizer?: { name?: string; url: string };
+  attendees?: Array<{
+    name?: string;
+    url: string;
+    status: string;
+    role: string;
+    type: string;
+    isCurrentUser: boolean;
+  }>;
+  status?: string;
+  isDetached?: boolean;
+  occurrenceDate?: string;
+  creationDate?: string;
+  lastModifiedDate?: string;
+  externalId?: string;
 }
 
 /**
@@ -196,21 +250,24 @@ export interface RemindersToolArgs extends BaseToolArgs {
   search?: string;
   dueWithin?: DueWithinOption;
   filterPriority?: 'high' | 'medium' | 'low' | 'none';
-  filterFlagged?: boolean;
   filterRecurring?: boolean;
   filterLocationBased?: boolean;
   filterTags?: string[]; // Filter by tags (reminders must have ALL specified tags)
   // Single item parameters
   title?: string;
   newTitle?: string;
+  startDate?: string;
   dueDate?: string;
   note?: string;
   url?: string;
+  location?: string;
   completed?: boolean;
+  completionDate?: string;
   priority?: number; // 0=none, 1=high, 5=medium, 9=low
-  flagged?: boolean;
+  alarms?: Alarm[];
+  clearAlarms?: boolean;
   // Recurrence parameters
-  recurrence?: RecurrenceRule;
+  recurrenceRules?: RecurrenceRule[];
   clearRecurrence?: boolean;
   // Location trigger parameters
   locationTrigger?: LocationTrigger;
@@ -261,14 +318,26 @@ export interface CalendarToolArgs extends BaseToolArgs {
   // Filtering parameters (for read action)
   filterCalendar?: string;
   search?: string;
+  availability?:
+    | 'not-supported'
+    | 'busy'
+    | 'free'
+    | 'tentative'
+    | 'unavailable';
   startDate?: string;
   endDate?: string;
   // Single item parameters
   title?: string;
   note?: string;
   location?: string;
+  structuredLocation?: StructuredLocation;
   url?: string;
   isAllDay?: boolean;
+  alarms?: Alarm[];
+  clearAlarms?: boolean;
+  recurrenceRules?: RecurrenceRule[];
+  clearRecurrence?: boolean;
+  span?: 'this-event' | 'future-events';
   // Target calendar for create/update operations
   targetCalendar?: string;
 }

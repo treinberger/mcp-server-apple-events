@@ -23,8 +23,6 @@ A Model Context Protocol (MCP) server that provides native integration with Appl
 - **Tags/Labels**: Organize reminders with custom tags for cross-list categorization and filtering
 - **Subtasks/Checklists**: Add checklist items to reminders with progress tracking
 
-> **Note**: The `flagged` parameter is accepted for API compatibility but has no effect. Apple's EventKit framework does not expose a public `isFlagged` property for reminders, so flagged status cannot be read or set programmatically.
-
 ### Advanced Features
 
 - **Smart Organization**: Automatic categorization and intelligent filtering by priority, due date, category, or completion status
@@ -291,7 +289,7 @@ This server now exposes service-scoped MCP tools that mirror Apple Reminders and
 
 **Tool Name**: `reminders_tasks`
 
-Manages individual reminder tasks with full CRUD support, including priority, flags, recurrence, location triggers, tags, and subtasks.
+Manages individual reminder tasks with full CRUD support, including priority, alarms, recurrence rules, start/due/completion dates, location triggers, tags, and subtasks.
 
 **Actions**: `read`, `create`, `update`, `delete`
 
@@ -319,12 +317,16 @@ Manages individual reminder tasks with full CRUD support, including priority, fl
 **Create Action** (`action: "create"`):
 
 - `title` _(required)_: Title of the reminder
+- `startDate` _(optional)_: Start date in format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:mm:ss'
 - `dueDate` _(optional)_: Due date in format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:mm:ss'
 - `targetList` _(optional)_: Name of the reminders list to add to
 - `note` _(optional)_: Note text to attach to the reminder
 - `url` _(optional)_: URL to associate with the reminder
+- `location` _(optional)_: Location text (`EKCalendarItem.location`) (not a geofence trigger)
 - `priority` _(optional)_: Priority level (0=none, 1=high, 5=medium, 9=low)
-- `recurrence` _(optional)_: Recurrence rule object (see Recurrence section below)
+- `alarms` _(optional)_: Array of alarm objects (see Alarm Object below)
+- `recurrenceRules` _(optional)_: Array of recurrence rules (see Recurrence Rules below)
+- `recurrence` _(optional)_: Legacy single recurrence rule object (shorthand for one-item `recurrenceRules`)
 - `locationTrigger` _(optional)_: Location trigger object (see Location Triggers section below)
 - `tags` _(optional)_: Array of tags to add to the reminder
 - `subtasks` _(optional)_: Array of subtask titles to create with the reminder
@@ -333,13 +335,19 @@ Manages individual reminder tasks with full CRUD support, including priority, fl
 
 - `id` _(required)_: Unique identifier of the reminder to update
 - `title` _(optional)_: New title for the reminder
+- `startDate` _(optional)_: New start date
 - `dueDate` _(optional)_: New due date in format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:mm:ss'
 - `note` _(optional)_: New note text
 - `url` _(optional)_: New URL to attach to the reminder
+- `location` _(optional)_: New location text (set to empty string to clear)
 - `completed` _(optional)_: Mark reminder as completed/uncompleted
+- `completionDate` _(optional)_: Set an explicit completion date/time
 - `targetList` _(optional)_: Name of the list containing the reminder
 - `priority` _(optional)_: New priority level (0=none, 1=high, 5=medium, 9=low)
-- `recurrence` _(optional)_: New recurrence rule (or set to update)
+- `alarms` _(optional)_: Replace alarms with this array
+- `clearAlarms` _(optional)_: Set to true to remove all alarms
+- `recurrenceRules` _(optional)_: Replace recurrence rules with this array
+- `recurrence` _(optional)_: Legacy single recurrence rule (shorthand for one-item `recurrenceRules`)
 - `clearRecurrence` _(optional)_: Set to true to remove recurrence
 - `locationTrigger` _(optional)_: New location trigger
 - `clearLocationTrigger` _(optional)_: Set to true to remove location trigger
@@ -351,7 +359,25 @@ Manages individual reminder tasks with full CRUD support, including priority, fl
 
 - `id` _(required)_: Unique identifier of the reminder to delete
 
-#### Recurrence Rule Object
+#### Alarm Object
+
+```json
+{
+  "relativeOffset": -900,            // Seconds (relative to due/start); negative = before
+  "absoluteDate": "2025-11-04T09:00:00+08:00", // Absolute trigger time (optional)
+  "locationTrigger": {               // Geofence trigger (optional)
+    "title": "Office",
+    "latitude": 37.7749,
+    "longitude": -122.4194,
+    "radius": 100,
+    "proximity": "enter"
+  }
+}
+```
+
+Each alarm must specify exactly **one** of `relativeOffset`, `absoluteDate`, or `locationTrigger`.
+
+#### Recurrence Rule Object (for `recurrenceRules`)
 
 ```json
 {
@@ -593,6 +619,7 @@ Handles EventKit calendar events (time blocks) with CRUD capabilities.
 - `id` _(optional)_: Unique identifier of an event to read
 - `filterCalendar` _(optional)_: Calendar name filter
 - `search` _(optional)_: Keyword match against title, notes, or location
+- `availability` _(optional)_: Filter by availability ("busy", "free", "tentative", "unavailable", "not-supported")
 - `startDate` _(optional)_: Filter events starting on/after this date
 - `endDate` _(optional)_: Filter events ending on/before this date
 
@@ -602,16 +629,23 @@ Handles EventKit calendar events (time blocks) with CRUD capabilities.
 - `startDate` _(required)_: Start date/time
 - `endDate` _(required)_: End date/time
 - `targetCalendar` _(optional)_: Calendar name to create in
-- `note`, `location`, `url`, `isAllDay` _(optional)_: Additional metadata
+- `note`, `location`, `structuredLocation`, `url`, `isAllDay` _(optional)_: Additional metadata
+- `availability` _(optional)_: Availability ("busy", "free", "tentative", "unavailable")
+- `alarms` _(optional)_: Array of alarm objects (see Alarm Object above)
+- `recurrenceRules` _(optional)_: Array of recurrence rules (see Recurrence Rule Object above)
 
 **Update Action** (`action: "update"`):
 
 - `id` _(required)_: Event identifier
 - Other fields align with create parameters and are optional updates
+- `clearAlarms` _(optional)_: Set to true to remove all alarms
+- `clearRecurrence` _(optional)_: Set to true to remove all recurrence rules
+- `span` _(optional)_: Scope for recurring event changes: `"this-event"` or `"future-events"`
 
 **Delete Action** (`action: "delete"`):
 
 - `id` _(required)_: Event identifier to remove
+- `span` _(optional)_: Scope for recurring event deletes: `"this-event"` or `"future-events"`
 
 ### Calendar Collections Tool
 
@@ -732,7 +766,6 @@ const urlsRegex = reminder.notes?.match(/https?:\/\/[^\s]+/g) || [];
       "isCompleted": false,
       "dueDate": "2024-03-25 18:00:00",
       "priority": 1,
-      "isFlagged": false,
       "tags": ["shopping", "errands"],
       "subtasks": [
         { "id": "a1b2c3d4", "title": "Milk", "isCompleted": true },
@@ -750,8 +783,6 @@ const urlsRegex = reminder.notes?.match(/https?:\/\/[^\s]+/g) || [];
   }
 }
 ```
-
-> **Note**: The `isFlagged` field is always `false` because Apple's EventKit does not expose the flagged status through its public API.
 
 ## Organization Strategies
 
@@ -941,4 +972,3 @@ The CLI entry point includes a project-root fallback, so you can start the serve
 
 - Swift binaries for native macOS integration
 - TypeScript compilation for cross-platform compatibility
-

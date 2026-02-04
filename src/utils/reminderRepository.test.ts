@@ -138,7 +138,6 @@ describe('ReminderRepository', () => {
           isCompleted: false,
           list: 'Default',
           priority: 0,
-          isFlagged: false,
         },
       ];
 
@@ -278,7 +277,6 @@ describe('ReminderRepository', () => {
         isCompleted: false,
         list: 'Default',
         priority: 0,
-        isFlagged: false,
       };
 
       mockExecuteCli.mockResolvedValue(mockResult);
@@ -312,7 +310,6 @@ describe('ReminderRepository', () => {
         isCompleted: false,
         list: 'Default',
         priority: 0,
-        isFlagged: false,
       };
 
       mockExecuteCli.mockResolvedValue(mockResult);
@@ -340,7 +337,6 @@ describe('ReminderRepository', () => {
         isCompleted: false,
         list: 'Default',
         priority: 0,
-        isFlagged: false,
       };
 
       mockExecuteCli.mockResolvedValue(mockResult);
@@ -371,7 +367,6 @@ describe('ReminderRepository', () => {
         isCompleted: false,
         list: 'Default',
         priority: 0,
-        isFlagged: false,
       };
 
       mockExecuteCli.mockResolvedValue(mockResult);

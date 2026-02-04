@@ -64,6 +64,35 @@ describe('Tools Definitions', () => {
       ]);
     });
 
+    it('should expose EventKit-aligned fields for reminders and events', () => {
+      const remindersTool = TOOLS.find(
+        (tool) => tool.name === 'reminders_tasks',
+      );
+      const remindersProps = remindersTool?.inputSchema.properties ?? {};
+
+      // EKReminder / EKCalendarItem alignment
+      expect(remindersProps).toHaveProperty('startDate');
+      expect(remindersProps).toHaveProperty('completionDate');
+      expect(remindersProps).toHaveProperty('location');
+      expect(remindersProps).toHaveProperty('alarms');
+      expect(remindersProps).toHaveProperty('clearAlarms');
+      expect(remindersProps).toHaveProperty('recurrenceRules');
+
+      const calendarEventsTool = TOOLS.find(
+        (tool) => tool.name === 'calendar_events',
+      );
+      const calendarProps = calendarEventsTool?.inputSchema.properties ?? {};
+
+      // EKEvent / EKCalendarItem alignment
+      expect(calendarProps).toHaveProperty('availability');
+      expect(calendarProps).toHaveProperty('structuredLocation');
+      expect(calendarProps).toHaveProperty('alarms');
+      expect(calendarProps).toHaveProperty('clearAlarms');
+      expect(calendarProps).toHaveProperty('recurrenceRules');
+      expect(calendarProps).toHaveProperty('clearRecurrence');
+      expect(calendarProps).toHaveProperty('span');
+    });
+
     it('should enforce tool name pattern compliance', () => {
       const pattern = /^[a-zA-Z0-9_-]+$/;
       const invalidTool = TOOLS.find((tool) => !pattern.test(tool.name));

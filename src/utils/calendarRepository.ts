@@ -15,6 +15,7 @@ import { executeCli } from './cliExecutor.js';
 import {
   addOptionalArg,
   addOptionalBooleanArg,
+  addOptionalJsonArg,
   nullToUndefined,
 } from './helpers.js';
 
@@ -43,7 +44,19 @@ class CalendarRepository {
     return nullToUndefined(event, [
       'notes',
       'location',
+      'structuredLocation',
       'url',
+      'availability',
+      'alarms',
+      'recurrenceRules',
+      'organizer',
+      'attendees',
+      'status',
+      'isDetached',
+      'occurrenceDate',
+      'creationDate',
+      'lastModifiedDate',
+      'externalId',
     ]) as CalendarEvent;
   }
 
@@ -53,6 +66,7 @@ class CalendarRepository {
       endDate?: string;
       calendarName?: string;
       search?: string;
+      availability?: string;
     } = {},
   ): Promise<CalendarEvent[]> {
     const { events } = await this.readEvents(
@@ -61,9 +75,33 @@ class CalendarRepository {
       filters.calendarName,
       filters.search,
     );
-    return events.map((e) =>
-      nullToUndefined(e, ['notes', 'location', 'url']),
+    const normalized = events.map((e) =>
+      nullToUndefined(e, [
+        'notes',
+        'location',
+        'structuredLocation',
+        'url',
+        'availability',
+        'alarms',
+        'recurrenceRules',
+        'organizer',
+        'attendees',
+        'status',
+        'isDetached',
+        'occurrenceDate',
+        'creationDate',
+        'lastModifiedDate',
+        'externalId',
+      ]),
     ) as CalendarEvent[];
+
+    if (filters.availability) {
+      return normalized.filter(
+        (event) => event.availability === filters.availability,
+      );
+    }
+
+    return normalized;
   }
 
   async findAllCalendars(): Promise<Calendar[]> {
@@ -84,8 +122,12 @@ class CalendarRepository {
     addOptionalArg(args, '--targetCalendar', data.calendar);
     addOptionalArg(args, '--note', data.notes);
     addOptionalArg(args, '--location', data.location);
+    addOptionalJsonArg(args, '--structuredLocation', data.structuredLocation);
     addOptionalArg(args, '--url', data.url);
     addOptionalBooleanArg(args, '--isAllDay', data.isAllDay);
+    addOptionalArg(args, '--availability', data.availability);
+    addOptionalJsonArg(args, '--alarms', data.alarms);
+    addOptionalJsonArg(args, '--recurrenceRules', data.recurrenceRules);
 
     return executeCli<EventJSON>(args);
   }
@@ -98,14 +140,27 @@ class CalendarRepository {
     addOptionalArg(args, '--endDate', data.endDate);
     addOptionalArg(args, '--note', data.notes);
     addOptionalArg(args, '--location', data.location);
+    if (data.structuredLocation === null) {
+      args.push('--structuredLocation', '');
+    } else {
+      addOptionalJsonArg(args, '--structuredLocation', data.structuredLocation);
+    }
     addOptionalArg(args, '--url', data.url);
     addOptionalBooleanArg(args, '--isAllDay', data.isAllDay);
+    addOptionalArg(args, '--availability', data.availability);
+    addOptionalJsonArg(args, '--alarms', data.alarms);
+    addOptionalBooleanArg(args, '--clearAlarms', data.clearAlarms);
+    addOptionalJsonArg(args, '--recurrenceRules', data.recurrenceRules);
+    addOptionalBooleanArg(args, '--clearRecurrence', data.clearRecurrence);
+    addOptionalArg(args, '--span', data.span);
 
     return executeCli<EventJSON>(args);
   }
 
-  async deleteEvent(id: string): Promise<void> {
-    await executeCli<unknown>(['--action', 'delete-event', '--id', id]);
+  async deleteEvent(id: string, span?: string): Promise<void> {
+    const args = ['--action', 'delete-event', '--id', id];
+    addOptionalArg(args, '--span', span);
+    await executeCli<unknown>(args);
   }
 }
 

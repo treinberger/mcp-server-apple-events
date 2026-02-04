@@ -23,8 +23,6 @@ English | [简体中文](README.zh-CN.md)
 - **标签/标签**：使用自定义标签组织提醒事项，以便进行跨列表分类和过滤
 - **子任务/清单**：向提醒事项添加带有进度跟踪的清单项目
 
-> **注意**：`flagged` 参数已被接受以保持 API 兼容性，但没有实际效果。Apple 的 EventKit 框架未向提醒事项公开公共 `isFlagged` 属性，因此无法以编程方式读取或设置旗标状态。
-
 ### 高级功能
 - **智能组织**：按优先级、截止日期、类别或完成状态的自动分类 and 智能过滤
 - **强大搜索**：包括完成状态、截止日期范围、标签和全文搜索的多条件过滤
@@ -274,7 +272,7 @@ code %APPDATA%\Claude\claude_desktop_config.json
 
 **工具名称**：`reminders_tasks`
 
-用于管理单个提醒事项任务，支持完整的 CRUD 操作，包括优先级、旗标、重复、位置触发器、标签和子任务。
+用于管理单个提醒事项任务，支持完整的 CRUD 操作，包括优先级、提醒（alarms）、重复规则（recurrence rules）、开始/到期/完成时间、位置触发器、标签和子任务。
 
 **操作**：`read`、`create`、`update`、`delete`
 
@@ -299,12 +297,16 @@ code %APPDATA%\Claude\claude_desktop_config.json
 
 **创建操作**（`action: "create"`）：
 - `title` *(必填)*：提醒事项标题
+- `startDate` *(可选)*：开始时间，格式为 `YYYY-MM-DD` 或 `YYYY-MM-DD HH:mm:ss`
 - `dueDate` *(可选)*：到期时间，格式为 `YYYY-MM-DD` 或 `YYYY-MM-DD HH:mm:ss`
 - `targetList` *(可选)*：要添加到的提醒事项列表名称
 - `note` *(可选)*：提醒事项备注内容
 - `url` *(可选)*：与提醒事项关联的 URL
+- `location` *(可选)*：位置文本（`EKCalendarItem.location`，不是地理围栏触发器）
 - `priority` *(可选)*：优先级级别 (0=无, 1=高, 5=中, 9=低)
-- `recurrence` *(可选)*：重复规则对象
+- `alarms` *(可选)*：提醒数组（见下方「提醒对象」）
+- `recurrenceRules` *(可选)*：重复规则数组（见下方「重复规则对象」）
+- `recurrence` *(可选)*：兼容旧写法的单个重复规则（等价于单元素 `recurrenceRules`）
 - `locationTrigger` *(可选)*：位置触发器对象
 - `tags` *(可选)*：要添加到提醒的标签数组
 - `subtasks` *(可选)*：要随提醒创建的子任务标题数组
@@ -312,13 +314,19 @@ code %APPDATA%\Claude\claude_desktop_config.json
 **更新操作**（`action: "update"`）：
 - `id` *(必填)*：要更新的提醒事项唯一标识符
 - `title` *(可选)*：提醒事项新标题
+- `startDate` *(可选)*：新的开始时间
 - `dueDate` *(可选)*：新的到期时间，格式为 `YYYY-MM-DD` 或 `YYYY-MM-DD HH:mm:ss`
 - `note` *(可选)*：新的备注内容
 - `url` *(可选)*：新的 URL
+- `location` *(可选)*：新的位置文本（传空字符串可清空）
 - `completed` *(可选)*：设置提醒事项完成状态
+- `completionDate` *(可选)*：设置显式完成时间
 - `targetList` *(可选)*：提醒事项所在列表
 - `priority` *(可选)*：新优先级级别
-- `recurrence` *(可选)*：新重复规则
+- `alarms` *(可选)*：用此数组替换所有提醒
+- `clearAlarms` *(可选)*：设置为 true 以移除所有提醒
+- `recurrenceRules` *(可选)*：用此数组替换所有重复规则
+- `recurrence` *(可选)*：兼容旧写法的单个重复规则
 - `clearRecurrence` *(可选)*：设置为 true 以移除重复规则
 - `locationTrigger` *(可选)*：新位置触发器
 - `clearLocationTrigger` *(可选)*：设置为 true 以移除位置触发器
@@ -329,7 +337,25 @@ code %APPDATA%\Claude\claude_desktop_config.json
 **删除操作**（`action: "delete"`）：
 - `id` *(必填)*：要删除的提醒事项唯一标识符
 
-#### 重复规则对象
+#### 提醒对象（Alarm Object）
+
+```json
+{
+  "relativeOffset": -900,            // 秒（相对到期/开始时间），负数表示提前
+  "absoluteDate": "2025-11-04T09:00:00+08:00", // 绝对触发时间（可选）
+  "locationTrigger": {               // 地理围栏触发（可选）
+    "title": "办公室",
+    "latitude": 37.7749,
+    "longitude": -122.4194,
+    "radius": 100,
+    "proximity": "enter"
+  }
+}
+```
+
+每个提醒对象必须且只能指定 `relativeOffset`、`absoluteDate`、`locationTrigger` 之一。
+
+#### 重复规则对象（用于 `recurrenceRules`）
 
 ```json
 {
@@ -432,6 +458,36 @@ code %APPDATA%\Claude\claude_desktop_config.json
 - `handleUpdateCalendarEvent()` - 更新现有事件
 - `handleDeleteCalendarEvent()` - 删除日历事件
 
+#### 按操作的参数
+
+**读取操作**（`action: "read"`）：
+- `id` *(可选)*：读取单个事件的唯一标识符
+- `filterCalendar` *(可选)*：按日历名称筛选
+- `search` *(可选)*：按标题/备注/地点搜索
+- `availability` *(可选)*：按可用性筛选（"busy"、"free"、"tentative"、"unavailable"、"not-supported"）
+- `startDate`、`endDate` *(可选)*：按时间范围筛选
+
+**创建操作**（`action: "create"`）：
+- `title` *(必填)*：事件标题
+- `startDate` *(必填)*：开始时间
+- `endDate` *(必填)*：结束时间
+- `targetCalendar` *(可选)*：目标日历名称
+- `note`、`location`、`structuredLocation`、`url`、`isAllDay` *(可选)*：基础字段
+- `availability` *(可选)*：可用性（"busy"、"free"、"tentative"、"unavailable"）
+- `alarms` *(可选)*：提醒数组（见上方「提醒对象」）
+- `recurrenceRules` *(可选)*：重复规则数组（见上方「重复规则对象」）
+
+**更新操作**（`action: "update"`）：
+- `id` *(必填)*：事件唯一标识符
+- 其余字段同创建操作，均为可选更新
+- `clearAlarms` *(可选)*：设置为 true 以移除所有提醒
+- `clearRecurrence` *(可选)*：设置为 true 以移除所有重复规则
+- `span` *(可选)*：循环事件变更范围：`"this-event"` 或 `"future-events"`
+
+**删除操作**（`action: "delete"`）：
+- `id` *(必填)*：事件唯一标识符
+- `span` *(可选)*：循环事件删除范围：`"this-event"` 或 `"future-events"`
+
 ### 日历集合工具
 
 **工具名称**：`calendar_calendars`
@@ -466,8 +522,6 @@ code %APPDATA%\Claude\claude_desktop_config.json
     - [ ] 面包
   - 到期: 2024-03-25 18:00:00
 ```
-
-> **关于旗标状态的说明**：`isFlagged` 字段始终为 `false`，因为 Apple 的 EventKit 未通过其公共 API 公开旗标状态。
 
 ## 组织策略
 

@@ -16,7 +16,6 @@ function createReminder(
     list: 'Default',
     isCompleted: false,
     priority: 0,
-    isFlagged: false,
     ...overrides,
   };
 }

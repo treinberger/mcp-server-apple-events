@@ -5,8 +5,10 @@
 
 import type { Reminder, ReminderList } from '../types/index.js';
 import type {
+  AlarmJSON,
   CreateReminderData,
   ListJSON,
+  RecurrenceRuleJSON,
   ReminderJSON,
   ReminderReadResult,
   UpdateReminderData,
@@ -32,19 +34,29 @@ class ReminderRepository {
       'notes',
       'url',
       'dueDate',
+      'startDate',
+      'completionDate',
+      'location',
+      'timeZone',
+      'creationDate',
+      'lastModifiedDate',
+      'externalId',
     ]) as Reminder;
 
-    // Map recurrence from JSON (convert nulls to undefined, default interval to 1)
-    if (reminder.recurrence) {
-      normalizedReminder.recurrence = {
-        frequency: reminder.recurrence.frequency,
-        interval: reminder.recurrence.interval ?? 1,
-        endDate: reminder.recurrence.endDate ?? undefined,
-        occurrenceCount: reminder.recurrence.occurrenceCount ?? undefined,
-        daysOfWeek: reminder.recurrence.daysOfWeek ?? undefined,
-        daysOfMonth: reminder.recurrence.daysOfMonth ?? undefined,
-        monthsOfYear: reminder.recurrence.monthsOfYear ?? undefined,
-      };
+    const mapRecurrenceRule = (rule: RecurrenceRuleJSON) => ({
+      frequency: rule.frequency,
+      interval: rule.interval ?? 1,
+      endDate: rule.endDate ?? undefined,
+      occurrenceCount: rule.occurrenceCount ?? undefined,
+      daysOfWeek: rule.daysOfWeek ?? undefined,
+      daysOfMonth: rule.daysOfMonth ?? undefined,
+      monthsOfYear: rule.monthsOfYear ?? undefined,
+    });
+
+    // Map recurrence rules from JSON (convert nulls to undefined, default interval to 1)
+    if (reminder.recurrenceRules && reminder.recurrenceRules.length > 0) {
+      normalizedReminder.recurrenceRules =
+        reminder.recurrenceRules.map(mapRecurrenceRule);
     }
 
     // Map location trigger from JSON
@@ -57,6 +69,28 @@ class ReminderRepository {
         proximity:
           reminder.locationTrigger.proximity === 'leave' ? 'leave' : 'enter',
       };
+    }
+
+    // Map alarms from JSON
+    if (reminder.alarms && reminder.alarms.length > 0) {
+      normalizedReminder.alarms = reminder.alarms
+        .filter((alarm): alarm is AlarmJSON => alarm !== null)
+        .map((alarm) => ({
+          relativeOffset: alarm.relativeOffset ?? undefined,
+          absoluteDate: alarm.absoluteDate ?? undefined,
+          locationTrigger: alarm.locationTrigger
+            ? {
+                title: alarm.locationTrigger.title,
+                latitude: alarm.locationTrigger.latitude,
+                longitude: alarm.locationTrigger.longitude,
+                radius: alarm.locationTrigger.radius,
+                proximity:
+                  alarm.locationTrigger.proximity === 'leave'
+                    ? 'leave'
+                    : 'enter',
+              }
+            : undefined,
+        }));
     }
 
     // Extract tags from notes
@@ -114,9 +148,12 @@ class ReminderRepository {
     addOptionalArg(args, '--targetList', data.list);
     addOptionalArg(args, '--note', data.notes);
     addOptionalArg(args, '--url', data.url);
+    addOptionalArg(args, '--location', data.location);
+    addOptionalArg(args, '--startDate', data.startDate);
     addOptionalArg(args, '--dueDate', data.dueDate);
     addOptionalNumberArg(args, '--priority', data.priority);
-    addOptionalJsonArg(args, '--recurrence', data.recurrence);
+    addOptionalJsonArg(args, '--alarms', data.alarms);
+    addOptionalJsonArg(args, '--recurrenceRules', data.recurrenceRules);
     addOptionalJsonArg(args, '--locationTrigger', data.locationTrigger);
 
     return executeCli<ReminderJSON>(args);
@@ -128,10 +165,15 @@ class ReminderRepository {
     addOptionalArg(args, '--targetList', data.list);
     addOptionalArg(args, '--note', data.notes);
     addOptionalArg(args, '--url', data.url);
+    addOptionalArg(args, '--location', data.location);
+    addOptionalArg(args, '--startDate', data.startDate);
     addOptionalArg(args, '--dueDate', data.dueDate);
     addOptionalBooleanArg(args, '--isCompleted', data.isCompleted);
+    addOptionalArg(args, '--completionDate', data.completionDate);
     addOptionalNumberArg(args, '--priority', data.priority);
-    addOptionalJsonArg(args, '--recurrence', data.recurrence);
+    addOptionalJsonArg(args, '--alarms', data.alarms);
+    addOptionalBooleanArg(args, '--clearAlarms', data.clearAlarms);
+    addOptionalJsonArg(args, '--recurrenceRules', data.recurrenceRules);
     addOptionalBooleanArg(args, '--clearRecurrence', data.clearRecurrence);
     addOptionalJsonArg(args, '--locationTrigger', data.locationTrigger);
     addOptionalBooleanArg(

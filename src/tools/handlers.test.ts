@@ -86,7 +86,6 @@ describe('Tool Handlers', () => {
           dueDate: '2024-01-15T10:00:00Z',
           url: 'https://example.com',
           priority: 0,
-          isFlagged: false,
         },
         {
           id: '2',
@@ -97,7 +96,6 @@ describe('Tool Handlers', () => {
           dueDate: undefined,
           url: undefined,
           priority: 0,
-          isFlagged: false,
         },
       ];
       mockReminderRepository.findReminders.mockResolvedValue(mockReminders);
@@ -123,7 +121,6 @@ describe('Tool Handlers', () => {
           isCompleted: false,
           list: 'L',
           priority: 0,
-          isFlagged: false,
         },
         {
           id: 'b',
@@ -131,7 +128,6 @@ describe('Tool Handlers', () => {
           isCompleted: false,
           list: 'L',
           priority: 1,
-          isFlagged: false,
         },
         {
           id: 'c',
@@ -139,7 +135,6 @@ describe('Tool Handlers', () => {
           isCompleted: false,
           list: 'L',
           priority: 5,
-          isFlagged: false,
         },
         {
           id: 'd',
@@ -147,7 +142,6 @@ describe('Tool Handlers', () => {
           isCompleted: false,
           list: 'L',
           priority: 9,
-          isFlagged: false,
         },
       ];
       mockReminderRepository.findReminders.mockResolvedValue(mockReminders);
@@ -171,7 +165,6 @@ describe('Tool Handlers', () => {
         dueDate: '2024-12-25',
         url: 'https://example.com',
         priority: 0,
-        isFlagged: false,
       };
       mockReminderRepository.findReminderById.mockResolvedValue(mockReminder);
 
@@ -212,7 +205,6 @@ describe('Tool Handlers', () => {
         url: null,
         dueDate: null,
         priority: 0,
-        isFlagged: false,
         recurrence: null,
         locationTrigger: null,
       };
@@ -250,7 +242,6 @@ describe('Tool Handlers', () => {
         url: null,
         dueDate: null,
         priority: 0,
-        isFlagged: false,
         recurrence: null,
         locationTrigger: null,
       };
@@ -275,7 +266,6 @@ describe('Tool Handlers', () => {
         list: 'Inbox',
         notes: existingNotes,
         priority: 0,
-        isFlagged: false,
       };
       const mockReminderJSON = {
         ...mockReminder,
@@ -313,7 +303,6 @@ describe('Tool Handlers', () => {
         list: 'Inbox',
         notes: existingNotes,
         priority: 0,
-        isFlagged: false,
       };
       const mockReminderJSON = {
         ...mockReminder,
@@ -349,7 +338,6 @@ describe('Tool Handlers', () => {
         list: 'Inbox',
         notes: existingNotes,
         priority: 0,
-        isFlagged: false,
       };
       const mockReminderJSON = {
         ...mockReminder,

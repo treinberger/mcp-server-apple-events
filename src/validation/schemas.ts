@@ -146,49 +146,85 @@ const PriorityValueSchema = z
 /**
  * Recurrence rule schema for repeating reminders
  */
-const RecurrenceRuleSchema = z
-  .object({
-    frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
-    interval: z.number().int().positive().default(1),
-    endDate: SafeDateSchema,
-    occurrenceCount: z.number().int().positive().optional(),
-    daysOfWeek: z
-      .array(z.number().int().min(1).max(7))
-      .optional()
-      .refine((arr: number[] | undefined) => !arr || arr.length <= 7, {
-        message: 'daysOfWeek cannot have more than 7 entries',
-      }),
-    daysOfMonth: z
-      .array(z.number().int().min(1).max(31))
-      .optional()
-      .refine((arr: number[] | undefined) => !arr || arr.length <= 31, {
-        message: 'daysOfMonth cannot have more than 31 entries',
-      }),
-    monthsOfYear: z
-      .array(z.number().int().min(1).max(12))
-      .optional()
-      .refine((arr: number[] | undefined) => !arr || arr.length <= 12, {
-        message: 'monthsOfYear cannot have more than 12 entries',
-      }),
-  })
-  .optional();
+const RecurrenceRuleObjectSchema = z.object({
+  frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+  interval: z.number().int().positive().default(1),
+  endDate: SafeDateSchema,
+  occurrenceCount: z.number().int().positive().optional(),
+  daysOfWeek: z
+    .array(z.number().int().min(1).max(7))
+    .optional()
+    .refine((arr: number[] | undefined) => !arr || arr.length <= 7, {
+      message: 'daysOfWeek cannot have more than 7 entries',
+    }),
+  daysOfMonth: z
+    .array(z.number().int().min(1).max(31))
+    .optional()
+    .refine((arr: number[] | undefined) => !arr || arr.length <= 31, {
+      message: 'daysOfMonth cannot have more than 31 entries',
+    }),
+  monthsOfYear: z
+    .array(z.number().int().min(1).max(12))
+    .optional()
+    .refine((arr: number[] | undefined) => !arr || arr.length <= 12, {
+      message: 'monthsOfYear cannot have more than 12 entries',
+    }),
+});
+
+const RecurrenceRuleSchema = RecurrenceRuleObjectSchema.optional();
+
+const RecurrenceRulesSchema = z.array(RecurrenceRuleObjectSchema).optional();
 
 /**
  * Location trigger schema for geofence-based reminders
  */
-const LocationTriggerSchema = z
+const LocationTriggerObjectSchema = z.object({
+  title: createSafeTextSchema(1, VALIDATION.MAX_TITLE_LENGTH, 'Location title'),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  radius: z.number().positive().default(100),
+  proximity: z.enum(['enter', 'leave']),
+});
+
+const LocationTriggerSchema = LocationTriggerObjectSchema.optional();
+
+const StructuredLocationSchema = z
   .object({
     title: createSafeTextSchema(
       1,
       VALIDATION.MAX_TITLE_LENGTH,
       'Location title',
     ),
-    latitude: z.number().min(-90).max(90),
-    longitude: z.number().min(-180).max(180),
-    radius: z.number().positive().default(100),
-    proximity: z.enum(['enter', 'leave']),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    radius: z.number().positive().optional(),
   })
   .optional();
+
+const AlarmSchema = z
+  .object({
+    relativeOffset: z.number().finite().optional(),
+    absoluteDate: SafeDateSchema,
+    locationTrigger: LocationTriggerObjectSchema.optional(),
+  })
+  .refine(
+    (alarm) =>
+      [alarm.relativeOffset, alarm.absoluteDate, alarm.locationTrigger].filter(
+        (value) => value !== undefined,
+      ).length === 1,
+    {
+      message:
+        'Alarm must specify exactly one of relativeOffset, absoluteDate, or locationTrigger',
+    },
+  );
+
+const AlarmArraySchema = z.array(AlarmSchema).optional();
+
+const AvailabilitySchema = z
+  .enum(['not-supported', 'busy', 'free', 'tentative', 'unavailable'])
+  .optional();
+
+const SpanSchema = z.enum(['this-event', 'future-events']).optional();
 
 /**
  * Tag schema for reminder tags
@@ -215,27 +251,25 @@ const SubtaskTitleSchema = createSafeTextSchema(
 const SubtaskTitleArraySchema = z.array(SubtaskTitleSchema).optional();
 
 /**
- * Flagged field schema - EventKit does not support flagged status
- * Accept for API compatibility but reject with clear error message
- */
-const FlaggedSchema = z
-  .boolean()
-  .optional()
-  .refine((val) => val === undefined, {
-    message: 'Flagged reminders are not supported by EventKit.',
-  });
-
-/**
  * Common field combinations for reusability
  */
 const BaseReminderFields = {
   title: SafeTextSchema,
+  startDate: SafeDateSchema,
   dueDate: SafeDateSchema,
   note: SafeNoteSchema,
   url: SafeUrlSchema,
+  location: createSafeTextSchema(
+    0,
+    VALIDATION.MAX_LOCATION_LENGTH,
+    'Location',
+    true,
+  ),
   targetList: SafeListNameSchema,
   priority: PriorityValueSchema,
-  flagged: FlaggedSchema,
+  alarms: AlarmArraySchema,
+  clearAlarms: z.boolean().optional(),
+  recurrenceRules: RecurrenceRulesSchema,
   recurrence: RecurrenceRuleSchema,
   locationTrigger: LocationTriggerSchema,
   tags: TagArraySchema,
@@ -256,7 +290,6 @@ export const ReadRemindersSchema = z.object({
   search: SafeSearchSchema,
   dueWithin: DueWithinEnum,
   filterPriority: PriorityFilterEnum,
-  filterFlagged: z.boolean().optional(),
   filterRecurring: z.boolean().optional(),
   filterLocationBased: z.boolean().optional(),
   filterTags: TagArraySchema,
@@ -265,13 +298,23 @@ export const ReadRemindersSchema = z.object({
 export const UpdateReminderSchema = z.object({
   id: SafeIdSchema,
   title: SafeTextSchema.optional(),
+  startDate: SafeDateSchema,
   dueDate: SafeDateSchema,
   note: SafeNoteSchema,
   url: SafeUrlSchema,
+  location: createSafeTextSchema(
+    0,
+    VALIDATION.MAX_LOCATION_LENGTH,
+    'Location',
+    true,
+  ),
   completed: z.boolean().optional(),
+  completionDate: SafeDateSchema,
   targetList: SafeListNameSchema,
   priority: PriorityValueSchema,
-  flagged: FlaggedSchema,
+  alarms: AlarmArraySchema,
+  clearAlarms: z.boolean().optional(),
+  recurrenceRules: RecurrenceRulesSchema,
   recurrence: RecurrenceRuleSchema,
   clearRecurrence: z.boolean().optional(),
   locationTrigger: LocationTriggerSchema,
@@ -297,8 +340,12 @@ export const CreateCalendarEventSchema = z.object({
     'Location',
     true,
   ),
+  structuredLocation: StructuredLocationSchema,
   url: SafeUrlSchema,
   isAllDay: z.boolean().optional(),
+  availability: AvailabilitySchema,
+  alarms: AlarmArraySchema,
+  recurrenceRules: RecurrenceRulesSchema,
   targetCalendar: SafeListNameSchema,
 });
 
@@ -306,6 +353,7 @@ export const ReadCalendarEventsSchema = z.object({
   id: SafeIdSchema.optional(),
   filterCalendar: SafeListNameSchema,
   search: SafeSearchSchema,
+  availability: AvailabilitySchema,
   startDate: SafeDateSchema,
   endDate: SafeDateSchema,
 });
@@ -322,13 +370,21 @@ export const UpdateCalendarEventSchema = z.object({
     'Location',
     true,
   ),
+  structuredLocation: StructuredLocationSchema.nullable(),
   url: SafeUrlSchema,
   isAllDay: z.boolean().optional(),
+  availability: AvailabilitySchema,
+  alarms: AlarmArraySchema,
+  clearAlarms: z.boolean().optional(),
+  recurrenceRules: RecurrenceRulesSchema,
+  clearRecurrence: z.boolean().optional(),
+  span: SpanSchema,
   targetCalendar: SafeListNameSchema,
 });
 
 export const DeleteCalendarEventSchema = z.object({
   id: SafeIdSchema,
+  span: SpanSchema,
 });
 
 export const ReadCalendarsSchema = z.object({});
@@ -355,8 +411,8 @@ export const DeleteReminderListSchema = z.object({
  * @param {Record<string, string[]>} [details] - Optional field-specific error details
  * @example
  * throw new ValidationError('Invalid input', {
- *   title: ['Title is required', 'Title too long'],
- *   dueDate: ['Invalid date format']
+ * title: ['Title is required', 'Title too long'],
+ * dueDate: ['Invalid date format']
  * });
  */
 export class ValidationError extends Error {
@@ -383,12 +439,12 @@ export class ValidationError extends Error {
  * - Throws ValidationError for consistent error handling
  * @example
  * try {
- *   const data = validateInput(CreateReminderSchema, input);
- *   // data is now typed as CreateReminderData
+ * const data = validateInput(CreateReminderSchema, input);
+ * // data is now typed as CreateReminderData
  * } catch (error) {
- *   if (error instanceof ValidationError) {
- *     console.log(error.details); // Field-specific error messages
- *   }
+ * if (error instanceof ValidationError) {
+ * console.log(error.details); // Field-specific error messages
+ * }
  * }
  */
 export const validateInput = <T>(schema: z.ZodSchema<T>, input: unknown): T => {

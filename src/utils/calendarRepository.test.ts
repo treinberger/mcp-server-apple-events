@@ -62,6 +62,27 @@ describe('CalendarRepository', () => {
       });
     });
 
+    it('supports availability values returned by Swift', async () => {
+      const availability: CalendarEvent['availability'] = 'unknown';
+      mockExecuteCli.mockResolvedValue({
+        calendars: [],
+        events: [
+          {
+            id: '1',
+            title: 'Event',
+            startDate: '2025-11-04T09:00:00+08:00',
+            endDate: '2025-11-04T10:00:00+08:00',
+            calendar: 'Work',
+            isAllDay: false,
+            availability,
+          },
+        ],
+      });
+
+      const result = await repository.findEventById('1');
+      expect(result.availability).toBe('unknown');
+    });
+
     it('should throw error when event not found', async () => {
       const mockEvents: Partial<CalendarEvent>[] = [
         {
@@ -332,6 +353,26 @@ describe('CalendarRepository', () => {
         '2025-11-04 17:00:00',
       ]);
       expect(result).toEqual(mockEvent);
+    });
+
+    it('sends empty structuredLocation to clear it', async () => {
+      mockExecuteCli.mockResolvedValue({
+        id: '1',
+        title: 'Event',
+        startDate: '2025-11-04T09:00:00+08:00',
+        endDate: '2025-11-04T10:00:00+08:00',
+        calendar: 'Personal',
+        isAllDay: false,
+      });
+
+      await repository.updateEvent({
+        id: '1',
+        structuredLocation: null,
+      });
+
+      expect(mockExecuteCli).toHaveBeenCalledWith(
+        expect.arrayContaining(['--structuredLocation', '']),
+      );
     });
 
     it('should update event calendar', async () => {

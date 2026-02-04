@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.3.0] - 2026-01-21
+## [1.3.0] - 2026-02-04
 
 ### Added
 
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Documented EventKit limitation: `isFlagged` property not available in public API (always returns `false`)
+- Documented EventKit limitation: reminder flag status not available in public API
 - Timeout management for permission prompt AppleScripts
 - Permission prompt race conditions and reliability issues
 - Proactive AppleScript trigger for permission prompts

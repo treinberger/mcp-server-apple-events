@@ -6,6 +6,22 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { ValidationError } from '../validation/schemas.js';
 
+const USER_ACTIONABLE_PERMISSION_PATTERNS = [
+  /permission denied/i,
+  /permission is write-only/i,
+  /access denied/i,
+  /not authorized.*(calendar|reminders)/i,
+  /System Settings > Privacy & Security/i,
+  /full calendar access/i,
+  /full reminder access/i,
+] as const;
+
+function isUserActionablePermissionError(message: string): boolean {
+  return USER_ACTIONABLE_PERMISSION_PATTERNS.some((pattern) =>
+    pattern.test(message),
+  );
+}
+
 /**
  * Custom error class for user-facing CLI failures (e.g., not found, invalid input).
  * Defined here to avoid circular/heavy imports from cliExecutor.
@@ -28,6 +44,11 @@ function createErrorMessage(operation: string, error: unknown): string {
   // For validation and CLI user errors, always return the detailed message.
   if (error instanceof ValidationError || error instanceof CliUserError) {
     return message;
+  }
+
+  // Permission failures are user-actionable and should stay visible in production.
+  if (isUserActionablePermissionError(message)) {
+    return `Failed to ${operation}: ${message}`;
   }
 
   // For other errors, be generic in production.

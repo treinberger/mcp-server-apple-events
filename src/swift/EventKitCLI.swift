@@ -1367,17 +1367,17 @@ func main() {
                 manager.requestCalendarAccess { granted, error in
                     guard granted else {
                         let errorMsg = error?.localizedDescription ?? "Unknown error"
-                        outputError("Calendar permission denied. \(errorMsg)\n\nPlease grant calendar permissions in:\nSystem Settings > Privacy & Security > Calendars")
+                        outputError("Calendar permission denied. \(errorMsg)\n\nPlease grant Full Calendar Access in:\nSystem Settings > Privacy & Security > Calendars")
                         return
                     }
                     handleAction()
                 }
             case .denied, .restricted:
                 // Permission was denied or restricted
-                outputError("Calendar permission denied or restricted.\n\nPlease grant calendar permissions in:\nSystem Settings > Privacy & Security > Calendars")
+                outputError("Calendar permission denied or restricted.\n\nPlease grant Full Calendar Access in:\nSystem Settings > Privacy & Security > Calendars")
             case .writeOnly:
                 // Write-only access is not sufficient for reading calendars
-                outputError("Calendar permission is write-only, but read access is required.\n\nPlease grant full calendar permissions in:\nSystem Settings > Privacy & Security > Calendars")
+                outputError("Calendar permission is write-only, but read access is required.\n\nPlease grant Full Calendar Access in:\nSystem Settings > Privacy & Security > Calendars")
             @unknown default:
                 outputError("Unknown calendar permission status.")
             }

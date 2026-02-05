@@ -61,6 +61,16 @@ Apple 已将提醒事项和日历权限拆分为「仅写入」与「完全访�
 
 若 Claude 的工具调用依旧遇到权限错误，Node.js 层会自动运行一段最小化的 AppleScript（`osascript -e 'tell application "Reminders" …'`）来唤起系统弹窗，然后再次重试 Swift CLI。
 
+### 日历读取报错排查
+
+如果看到 `Failed to read calendar events`，请先确认日历权限已设置为 **Full Calendar Access**：
+
+- 打开 `System Settings > Privacy & Security > Calendars`
+- 找到启动 MCP 服务的应用（例如 Terminal 或 Claude Desktop）
+- 将权限切换为 **Full Calendar Access**
+
+你也可以重新运行 `./check-permissions.sh`（脚本现在会同时检查 Reminders 与 Calendars 权限）。
+
 **验证命令**
 
 ```bash

@@ -63,6 +63,16 @@ When the CLI detects a `notDetermined` authorization status it calls `requestFul
 
 If a Claude tool call still encounters a permission failure, the Node.js layer automatically runs a minimal AppleScript (`osascript -e 'tell application "Reminders" …'`) to surface the dialog and then retries the Swift CLI once.
 
+### Troubleshooting Calendar Read Errors
+
+If you see `Failed to read calendar events`, verify Calendar is set to **Full Calendar Access**:
+
+- Open `System Settings > Privacy & Security > Calendars`
+- Find the app that launches this MCP server (for example Terminal or Claude Desktop)
+- Change access to **Full Calendar Access**
+
+You can also re-run `./check-permissions.sh` (it now validates both Reminders and Calendars access).
+
 **Verification command**
 
 ```bash

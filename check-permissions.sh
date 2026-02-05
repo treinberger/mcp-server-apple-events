@@ -17,6 +17,17 @@ else
     exit 1
 fi
 
+echo "Checking EventKit (Calendars) permission..."
+CALENDAR_CHECK=$(./bin/EventKitCLI --action read-calendars 2>&1)
+if [[ $? -eq 0 ]]; then
+    echo "Calendar permission granted."
+else
+    echo "Calendar permission denied or requires authorization."
+    echo "Grant Full Calendar Access in: System Settings > Privacy & Security > Calendars"
+    echo "Run this script again after granting access."
+    exit 1
+fi
+
 # Check AppleScript Automation permission
 echo "Checking AppleScript Automation permission..."
 APPLESCRIPT_CHECK=$(osascript -e 'tell application "Reminders" to get the name of every list' 2>&1)

@@ -158,6 +158,64 @@ describe('ErrorHandling', () => {
       if (originalDebug) process.env.DEBUG = originalDebug;
     });
 
+    it('shows actionable calendar permission error in production mode', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalDebug = process.env.DEBUG;
+      delete process.env.DEBUG;
+      process.env.NODE_ENV = 'production';
+
+      const permissionMessage =
+        'Calendar permission denied or restricted.\n\nPlease grant Full Calendar Access in:\nSystem Settings > Privacy & Security > Calendars';
+      const mockOperation = jest
+        .fn()
+        .mockRejectedValue(new Error(permissionMessage));
+
+      const result = await handleAsyncOperation(
+        mockOperation,
+        'read calendar events',
+      );
+
+      expect(result.content[0]).toHaveProperty('type', 'text');
+      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      expect(text).toContain('Failed to read calendar events:');
+      expect(text).toContain('Full Calendar Access');
+      expect(text).toContain(
+        'System Settings > Privacy & Security > Calendars',
+      );
+
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalDebug) process.env.DEBUG = originalDebug;
+    });
+
+    it('shows actionable write-only calendar permission error in production mode', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalDebug = process.env.DEBUG;
+      delete process.env.DEBUG;
+      process.env.NODE_ENV = 'production';
+
+      const permissionMessage =
+        'Calendar permission is write-only, but read access is required.\n\nPlease grant full calendar permissions in:\nSystem Settings > Privacy & Security > Calendars';
+      const mockOperation = jest
+        .fn()
+        .mockRejectedValue(new Error(permissionMessage));
+
+      const result = await handleAsyncOperation(
+        mockOperation,
+        'read calendar events',
+      );
+
+      expect(result.content[0]).toHaveProperty('type', 'text');
+      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      expect(text).toContain('Failed to read calendar events:');
+      expect(text).toContain('write-only');
+      expect(text).toContain(
+        'System Settings > Privacy & Security > Calendars',
+      );
+
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalDebug) process.env.DEBUG = originalDebug;
+    });
+
     it.each([
       ['String error', 'string error'],
       [{ code: 'ERROR' }, { code: 'ERROR' }],

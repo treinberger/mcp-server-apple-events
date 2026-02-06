@@ -106,6 +106,8 @@ export interface EventJSON {
 export interface CalendarJSON {
   id: string;
   title: string;
+  account: string;
+  accountType: string;
 }
 
 /**

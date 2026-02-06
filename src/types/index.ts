@@ -174,6 +174,8 @@ export interface CalendarEvent {
 export interface Calendar {
   id: string;
   title: string;
+  account: string;
+  accountType: string;
 }
 
 /**
@@ -317,6 +319,7 @@ export interface CalendarToolArgs extends BaseToolArgs {
   id?: string;
   // Filtering parameters (for read action)
   filterCalendar?: string;
+  filterAccount?: string;
   search?: string;
   availability?:
     | 'not-supported'

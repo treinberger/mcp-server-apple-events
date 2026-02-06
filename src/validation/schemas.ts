@@ -352,6 +352,7 @@ export const CreateCalendarEventSchema = z.object({
 export const ReadCalendarEventsSchema = z.object({
   id: SafeIdSchema.optional(),
   filterCalendar: SafeListNameSchema,
+  filterAccount: SafeListNameSchema,
   search: SafeSearchSchema,
   availability: AvailabilitySchema,
   startDate: SafeDateSchema,

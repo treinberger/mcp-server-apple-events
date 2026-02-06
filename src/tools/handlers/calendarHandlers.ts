@@ -177,6 +177,7 @@ export const handleReadCalendarEvents = async (
       calendarName: validatedArgs.filterCalendar,
       search: validatedArgs.search,
       availability: validatedArgs.availability,
+      accountName: validatedArgs.filterAccount,
     });
 
     return formatListMarkdown(
@@ -197,7 +198,9 @@ export const handleReadCalendars = async (
     return formatListMarkdown(
       'Calendars',
       calendars,
-      (calendar) => [`- ${calendar.title} (ID: ${calendar.id})`],
+      (calendar) => [
+        `- ${calendar.title} (${calendar.account}) (ID: ${calendar.id})`,
+      ],
       'No calendars found.',
     );
   }, 'read calendars');

@@ -625,6 +625,11 @@ const _EXTENDED_TOOLS: ExtendedTool[] = [
           type: 'string',
           description: 'Filter events by a specific calendar name.',
         },
+        filterAccount: {
+          type: 'string',
+          description:
+            'Filter events by account name (e.g., "Google", "Exchange"). Use calendar_calendars to see available accounts.',
+        },
         search: {
           type: 'string',
           description:

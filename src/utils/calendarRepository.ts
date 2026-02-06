@@ -25,12 +25,14 @@ class CalendarRepository {
     endDate?: string,
     calendarName?: string,
     search?: string,
+    accountName?: string,
   ): Promise<EventsReadResult> {
     const args = ['--action', 'read-events'];
     addOptionalArg(args, '--startDate', startDate);
     addOptionalArg(args, '--endDate', endDate);
     addOptionalArg(args, '--filterCalendar', calendarName);
     addOptionalArg(args, '--search', search);
+    addOptionalArg(args, '--filterAccount', accountName);
 
     return executeCli<EventsReadResult>(args);
   }
@@ -67,6 +69,7 @@ class CalendarRepository {
       calendarName?: string;
       search?: string;
       availability?: string;
+      accountName?: string;
     } = {},
   ): Promise<CalendarEvent[]> {
     const { events } = await this.readEvents(
@@ -74,6 +77,7 @@ class CalendarRepository {
       filters.endDate,
       filters.calendarName,
       filters.search,
+      filters.accountName,
     );
     const normalized = events.map((e) =>
       nullToUndefined(e, [

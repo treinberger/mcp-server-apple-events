@@ -385,6 +385,8 @@ struct EventJSON: Codable {
 struct CalendarJSON: Codable {
     let id: String
     let title: String
+    let account: String
+    let accountType: String
 }
 
 struct EventsReadResult: Codable {
@@ -873,8 +875,11 @@ class RemindersManager {
         return eventStore.calendars(for: .event).map { $0.toCalendarJSON() }
     }
     
-    func getEvents(startDate: Date?, endDate: Date?, calendarName: String?, search: String?, availability: String?) throws -> [EventJSON] {
-        let calendars = calendarName != nil ? [try findCalendar(named: calendarName)] : eventStore.calendars(for: .event)
+    func getEvents(startDate: Date?, endDate: Date?, calendarName: String?, search: String?, availability: String?, accountName: String?) throws -> [EventJSON] {
+        var calendars = calendarName != nil ? [try findCalendar(named: calendarName)] : eventStore.calendars(for: .event)
+        if let account = accountName {
+            calendars = calendars.filter { $0.source.title == account }
+        }
         let predicate = eventStore.predicateForEvents(withStart: startDate ?? Date.distantPast, end: endDate ?? Date.distantFuture, calendars: calendars)
         
         let events = eventStore.events(matching: predicate)
@@ -1159,7 +1164,24 @@ extension EKCalendar {
     }
 
     func toCalendarJSON() -> CalendarJSON {
-        CalendarJSON(id: self.calendarIdentifier, title: self.title)
+        CalendarJSON(
+            id: self.calendarIdentifier,
+            title: self.title,
+            account: self.source.title,
+            accountType: sourceTypeString(self.source.sourceType)
+        )
+    }
+}
+
+private func sourceTypeString(_ type: EKSourceType) -> String {
+    switch type {
+    case .local: return "local"
+    case .exchange: return "exchange"
+    case .calDAV: return "caldav"
+    case .mobileMe: return "mobileme"
+    case .subscribed: return "subscribed"
+    case .birthdays: return "birthdays"
+    @unknown default: return "unknown"
     }
 }
 
@@ -1449,7 +1471,7 @@ func main() {
                 let endDateStr = parser.get("endDate")
                 let startDate = startDateStr != nil ? manager.parseDate(from: startDateStr!) : nil
                 let endDate = endDateStr != nil ? manager.parseDate(from: endDateStr!) : nil
-                let events = try manager.getEvents(startDate: startDate, endDate: endDate, calendarName: parser.get("filterCalendar"), search: parser.get("search"), availability: parser.get("availability"))
+                let events = try manager.getEvents(startDate: startDate, endDate: endDate, calendarName: parser.get("filterCalendar"), search: parser.get("search"), availability: parser.get("availability"), accountName: parser.get("filterAccount"))
                 print(String(data: try encoder.encode(StandardOutput(result: EventsReadResult(calendars: manager.getCalendars(), events: events))), encoding: .utf8)!)
             case "read-calendars":
                 print(String(data: try encoder.encode(StandardOutput(result: manager.getCalendars())), encoding: .utf8)!)

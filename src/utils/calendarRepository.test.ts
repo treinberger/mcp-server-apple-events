@@ -198,8 +198,13 @@ describe('CalendarRepository', () => {
   describe('findAllCalendars', () => {
     it('should return all calendars', async () => {
       const mockCalendars: Calendar[] = [
-        { id: '1', title: 'Work' },
-        { id: '2', title: 'Personal' },
+        { id: '1', title: 'Work', account: 'Google', accountType: 'caldav' },
+        {
+          id: '2',
+          title: 'Personal',
+          account: 'iCloud',
+          accountType: 'caldav',
+        },
       ];
 
       mockExecuteCli.mockResolvedValue(mockCalendars);
@@ -211,6 +216,24 @@ describe('CalendarRepository', () => {
         'read-calendars',
       ]);
       expect(result).toEqual(mockCalendars);
+    });
+  });
+
+  describe('findEvents with filterAccount', () => {
+    it('should pass filterAccount to CLI', async () => {
+      mockExecuteCli.mockResolvedValue({
+        calendars: [],
+        events: [],
+      });
+
+      await repository.findEvents({ accountName: 'Google' });
+
+      expect(mockExecuteCli).toHaveBeenCalledWith([
+        '--action',
+        'read-events',
+        '--filterAccount',
+        'Google',
+      ]);
     });
   });
 

@@ -642,20 +642,41 @@ describe('Tool Handlers', () => {
       expect(content).toContain('No calendar events found.');
       expect(mockCalendarRepository.findAllCalendars).not.toHaveBeenCalled();
     });
+
+    it('should pass filterAccount to findEvents', async () => {
+      mockCalendarRepository.findEvents.mockResolvedValue([]);
+      await handleReadCalendarEvents({
+        action: 'read',
+        filterAccount: 'Google',
+      });
+      expect(mockCalendarRepository.findEvents).toHaveBeenCalledWith(
+        expect.objectContaining({ accountName: 'Google' }),
+      );
+    });
   });
 
   describe('handleReadCalendars', () => {
     it('should return calendars formatted as Markdown', async () => {
       const mockCalendars = [
-        { id: 'cal-1', title: 'Work' },
-        { id: 'cal-2', title: 'Personal' },
+        {
+          id: 'cal-1',
+          title: 'Work',
+          account: 'Google',
+          accountType: 'caldav',
+        },
+        {
+          id: 'cal-2',
+          title: 'Personal',
+          account: 'iCloud',
+          accountType: 'caldav',
+        },
       ];
       mockCalendarRepository.findAllCalendars.mockResolvedValue(mockCalendars);
       const result = await handleReadCalendars({ action: 'read' });
       const content = getTextContent(result.content);
       expect(content).toContain('### Calendars (Total: 2)');
-      expect(content).toContain('- Work (ID: cal-1)');
-      expect(content).toContain('- Personal (ID: cal-2)');
+      expect(content).toContain('- Work (Google) (ID: cal-1)');
+      expect(content).toContain('- Personal (iCloud) (ID: cal-2)');
     });
 
     it('should support being called without args', async () => {

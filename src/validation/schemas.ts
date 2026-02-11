@@ -267,6 +267,7 @@ const BaseReminderFields = {
   ),
   targetList: SafeListNameSchema,
   priority: PriorityValueSchema,
+  completed: z.boolean().optional(),
   alarms: AlarmArraySchema,
   clearAlarms: z.boolean().optional(),
   recurrenceRules: RecurrenceRulesSchema,

@@ -152,6 +152,7 @@ class ReminderRepository {
     addOptionalArg(args, '--startDate', data.startDate);
     addOptionalArg(args, '--dueDate', data.dueDate);
     addOptionalNumberArg(args, '--priority', data.priority);
+    addOptionalBooleanArg(args, '--isCompleted', data.isCompleted);
     addOptionalJsonArg(args, '--alarms', data.alarms);
     addOptionalJsonArg(args, '--recurrenceRules', data.recurrenceRules);
     addOptionalJsonArg(args, '--locationTrigger', data.locationTrigger);

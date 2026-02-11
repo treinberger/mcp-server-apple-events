@@ -137,6 +137,7 @@ export interface CreateReminderData {
   startDate?: string;
   dueDate?: string;
   priority?: number;
+  isCompleted?: boolean;
   completionDate?: string;
   alarms?: AlarmJSON[];
   recurrenceRules?: RecurrenceRuleJSON[];

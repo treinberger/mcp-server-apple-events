@@ -619,10 +619,12 @@ class RemindersManager {
         return filtered.map { $0.toJSON() }
     }
 
-    func createReminder(title: String, listName: String?, notes: String?, location: String?, urlString: String?, startDateString: String?, dueDateString: String?, priority: Int?, alarmsJSON: String?, recurrenceRulesJSON: String?, locationTriggerJSON: String?) throws -> ReminderJSON {
+    func createReminder(title: String, listName: String?, notes: String?, location: String?, urlString: String?, startDateString: String?, dueDateString: String?, priority: Int?, alarmsJSON: String?, recurrenceRulesJSON: String?, locationTriggerJSON: String?, isCompleted: Bool?) throws -> ReminderJSON {
         let reminder = EKReminder(eventStore: eventStore)
         reminder.calendar = try findList(named: listName)
         reminder.title = title
+
+        if let isCompleted = isCompleted { reminder.isCompleted = isCompleted }
         if let location = location {
             reminder.location = location.isEmpty ? nil : location
         }
@@ -1434,7 +1436,8 @@ func main() {
                     priority: parser.get("priority").flatMap { Int($0) },
                     alarmsJSON: parser.get("alarms"),
                     recurrenceRulesJSON: parser.get("recurrenceRules") ?? parser.get("recurrence"),
-                    locationTriggerJSON: parser.get("locationTrigger")
+                    locationTriggerJSON: parser.get("locationTrigger"),
+                    isCompleted: parser.get("isCompleted").map { $0 == "true" }
                 )
                 print(String(data: try encoder.encode(StandardOutput(result: reminder)), encoding: .utf8)!)
             case "update":

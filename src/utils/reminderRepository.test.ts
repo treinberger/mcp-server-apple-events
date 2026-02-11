@@ -348,6 +348,50 @@ describe('ReminderRepository', () => {
       expect(args).not.toContain('--url');
       expect(args).not.toContain('--dueDate');
     });
+
+    it('should create reminder with completed status', async () => {
+      const data = {
+        title: 'Already Done',
+        isCompleted: true,
+      };
+      const mockResult: Reminder = {
+        id: '123',
+        title: 'Already Done',
+        isCompleted: true,
+        list: 'Default',
+        priority: 0,
+      };
+
+      mockExecuteCli.mockResolvedValue(mockResult);
+
+      const result = await repository.createReminder(data);
+
+      const args = mockExecuteCli.mock.calls[0][0];
+      expect(args).toContain('--isCompleted');
+      expect(args).toContain('true');
+      expect(result).toBe(mockResult);
+    });
+
+    it('should skip isCompleted when undefined', async () => {
+      const data = {
+        title: 'Test',
+        // isCompleted not provided
+      };
+      const mockResult: Reminder = {
+        id: '123',
+        title: 'Test',
+        isCompleted: false,
+        list: 'Default',
+        priority: 0,
+      };
+
+      mockExecuteCli.mockResolvedValue(mockResult);
+
+      await repository.createReminder(data);
+
+      const args = mockExecuteCli.mock.calls[0][0];
+      expect(args).not.toContain('--isCompleted');
+    });
   });
 
   describe('updateReminder', () => {

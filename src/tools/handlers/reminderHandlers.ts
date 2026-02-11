@@ -306,6 +306,7 @@ export const handleCreateReminder = async (
       startDate: validatedArgs.startDate,
       dueDate: validatedArgs.dueDate,
       priority: validatedArgs.priority,
+      isCompleted: validatedArgs.completed,
       alarms: validatedArgs.alarms,
       recurrenceRules:
         validatedArgs.recurrenceRules ??

@@ -151,6 +151,8 @@ code %APPDATA%\Claude\claude_desktop_config.json
 
 Add the following configuration to your `claude_desktop_config.json`:
 
+**Option A: Using npx (recommended)**
+
 ```json
 {
   "mcpServers": {
@@ -161,6 +163,24 @@ Add the following configuration to your `claude_desktop_config.json`:
   }
 }
 ```
+
+**Option B: Using local build**
+
+If you have built the project locally, use node with the path to run.cjs:
+
+```json
+{
+  "mcpServers": {
+    "apple-reminders": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-server-apple-events/bin/run.cjs"]
+    }
+  }
+}
+```
+
+For more information on connecting local MCP servers, see the
+[official MCP documentation](https://modelcontextprotocol.io/docs/develop/connect-local-servers).
 
 ### 3. Restart Claude Desktop
 

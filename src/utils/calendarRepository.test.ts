@@ -11,6 +11,12 @@ import { executeCli } from './cliExecutor.js';
 jest.mock('./cliExecutor.js');
 
 const mockExecuteCli = executeCli as jest.MockedFunction<typeof executeCli>;
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 describe('CalendarRepository', () => {
   const repository = calendarRepository;
@@ -107,6 +113,10 @@ describe('CalendarRepository', () => {
   });
 
   describe('findEvents', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
     it('should return all events when no filters provided', async () => {
       const mockEvents: Partial<CalendarEvent>[] = [
         {
@@ -126,8 +136,67 @@ describe('CalendarRepository', () => {
 
       const result = await repository.findEvents();
 
-      expect(mockExecuteCli).toHaveBeenCalledWith(['--action', 'read-events']);
       expect(result).toHaveLength(1);
+    });
+
+    it('should default date range to today through 14 days ahead when no dates are provided', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-02-19T12:00:00Z'));
+      mockExecuteCli.mockResolvedValue({
+        calendars: [],
+        events: [],
+      });
+
+      await repository.findEvents();
+
+      const expectedStart = formatLocalDate(new Date('2026-02-19T12:00:00Z'));
+      const expectedEndDate = new Date('2026-02-19T12:00:00Z');
+      expectedEndDate.setDate(expectedEndDate.getDate() + 14);
+      const expectedEnd = formatLocalDate(expectedEndDate);
+
+      expect(mockExecuteCli).toHaveBeenCalledWith([
+        '--action',
+        'read-events',
+        '--startDate',
+        expectedStart,
+        '--endDate',
+        expectedEnd,
+      ]);
+    });
+
+    it('should derive endDate as 14 days after startDate when only startDate is provided', async () => {
+      mockExecuteCli.mockResolvedValue({
+        calendars: [],
+        events: [],
+      });
+
+      await repository.findEvents({ startDate: '2026-02-11' });
+
+      expect(mockExecuteCli).toHaveBeenCalledWith([
+        '--action',
+        'read-events',
+        '--startDate',
+        '2026-02-11',
+        '--endDate',
+        '2026-02-25',
+      ]);
+    });
+
+    it('should derive startDate as 14 days before endDate when only endDate is provided', async () => {
+      mockExecuteCli.mockResolvedValue({
+        calendars: [],
+        events: [],
+      });
+
+      await repository.findEvents({ endDate: '2026-02-25' });
+
+      expect(mockExecuteCli).toHaveBeenCalledWith([
+        '--action',
+        'read-events',
+        '--startDate',
+        '2026-02-11',
+        '--endDate',
+        '2026-02-25',
+      ]);
     });
 
     it('should filter events by calendar name', async () => {
@@ -147,14 +216,20 @@ describe('CalendarRepository', () => {
         events: mockEvents,
       });
 
+      jest.useFakeTimers().setSystemTime(new Date('2026-02-19T12:00:00Z'));
       await repository.findEvents({ calendarName: 'Work' });
 
-      expect(mockExecuteCli).toHaveBeenCalledWith([
-        '--action',
-        'read-events',
-        '--filterCalendar',
-        'Work',
-      ]);
+      expect(mockExecuteCli).toHaveBeenCalledWith(
+        expect.arrayContaining(['--filterCalendar', 'Work']),
+      );
+      expect(mockExecuteCli).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--startDate',
+          formatLocalDate(new Date('2026-02-19T12:00:00Z')),
+          '--endDate',
+          '2026-03-05',
+        ]),
+      );
     });
 
     it('should filter events by date range', async () => {
@@ -184,14 +259,20 @@ describe('CalendarRepository', () => {
         events: [],
       });
 
+      jest.useFakeTimers().setSystemTime(new Date('2026-02-19T12:00:00Z'));
       await repository.findEvents({ search: 'meeting' });
 
-      expect(mockExecuteCli).toHaveBeenCalledWith([
-        '--action',
-        'read-events',
-        '--search',
-        'meeting',
-      ]);
+      expect(mockExecuteCli).toHaveBeenCalledWith(
+        expect.arrayContaining(['--search', 'meeting']),
+      );
+      expect(mockExecuteCli).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--startDate',
+          formatLocalDate(new Date('2026-02-19T12:00:00Z')),
+          '--endDate',
+          '2026-03-05',
+        ]),
+      );
     });
   });
 
@@ -220,20 +301,30 @@ describe('CalendarRepository', () => {
   });
 
   describe('findEvents with filterAccount', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
     it('should pass filterAccount to CLI', async () => {
       mockExecuteCli.mockResolvedValue({
         calendars: [],
         events: [],
       });
 
+      jest.useFakeTimers().setSystemTime(new Date('2026-02-19T12:00:00Z'));
       await repository.findEvents({ accountName: 'Google' });
 
-      expect(mockExecuteCli).toHaveBeenCalledWith([
-        '--action',
-        'read-events',
-        '--filterAccount',
-        'Google',
-      ]);
+      expect(mockExecuteCli).toHaveBeenCalledWith(
+        expect.arrayContaining(['--filterAccount', 'Google']),
+      );
+      expect(mockExecuteCli).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--startDate',
+          formatLocalDate(new Date('2026-02-19T12:00:00Z')),
+          '--endDate',
+          '2026-03-05',
+        ]),
+      );
     });
   });
 

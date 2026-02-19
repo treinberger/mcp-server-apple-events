@@ -19,6 +19,64 @@ import {
   nullToUndefined,
 } from './helpers.js';
 
+const DEFAULT_READ_WINDOW_DAYS = 14;
+
+const formatDateOnly = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateInput = (value: string): Date | undefined => {
+  const normalized = value.includes(' ') ? value.replace(' ', 'T') : value;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
+const shiftDays = (date: Date, days: number): Date => {
+  const shifted = new Date(date);
+  shifted.setDate(shifted.getDate() + days);
+  return shifted;
+};
+
+const resolveReadDateRange = (filters: {
+  startDate?: string;
+  endDate?: string;
+}): { startDate?: string; endDate?: string } => {
+  if (filters.startDate && filters.endDate) {
+    return { startDate: filters.startDate, endDate: filters.endDate };
+  }
+
+  if (!filters.startDate && !filters.endDate) {
+    const today = new Date();
+    return {
+      startDate: formatDateOnly(today),
+      endDate: formatDateOnly(shiftDays(today, DEFAULT_READ_WINDOW_DAYS)),
+    };
+  }
+
+  if (filters.startDate && !filters.endDate) {
+    const start = parseDateInput(filters.startDate);
+    if (!start) return { startDate: filters.startDate };
+    return {
+      startDate: filters.startDate,
+      endDate: formatDateOnly(shiftDays(start, DEFAULT_READ_WINDOW_DAYS)),
+    };
+  }
+
+  if (!filters.startDate && filters.endDate) {
+    const end = parseDateInput(filters.endDate);
+    if (!end) return { endDate: filters.endDate };
+    return {
+      startDate: formatDateOnly(shiftDays(end, -DEFAULT_READ_WINDOW_DAYS)),
+      endDate: filters.endDate,
+    };
+  }
+
+  return {};
+};
+
 class CalendarRepository {
   private async readEvents(
     startDate?: string,
@@ -72,9 +130,13 @@ class CalendarRepository {
       accountName?: string;
     } = {},
   ): Promise<CalendarEvent[]> {
+    const dateRange = resolveReadDateRange({
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+    });
     const { events } = await this.readEvents(
-      filters.startDate,
-      filters.endDate,
+      dateRange.startDate,
+      dateRange.endDate,
       filters.calendarName,
       filters.search,
       filters.accountName,

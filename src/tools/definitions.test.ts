@@ -98,5 +98,24 @@ describe('Tools Definitions', () => {
       const invalidTool = TOOLS.find((tool) => !pattern.test(tool.name));
       expect(invalidTool).toBeUndefined();
     });
+
+    it('should document default read date window behavior for calendar events', () => {
+      const calendarEventsTool = TOOLS.find(
+        (tool) => tool.name === 'calendar_events',
+      );
+      const startDateDescription = (
+        calendarEventsTool?.inputSchema.properties?.startDate as
+          | { description?: string }
+          | undefined
+      )?.description;
+      const endDateDescription = (
+        calendarEventsTool?.inputSchema.properties?.endDate as
+          | { description?: string }
+          | undefined
+      )?.description;
+
+      expect(startDateDescription).toContain('defaults to today');
+      expect(endDateDescription).toContain('defaults to today + 14 days');
+    });
   });
 });

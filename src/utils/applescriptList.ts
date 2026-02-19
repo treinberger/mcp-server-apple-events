@@ -5,6 +5,9 @@
 
 import { escapeAppleScriptString, runAppleScript } from './cliExecutor.js';
 
+const RECORD_SEPARATOR = String.fromCharCode(30);
+const FIELD_SEPARATOR = String.fromCharCode(31);
+
 /**
  * Gets the emblem (icon) for a reminder list
  * @param listTitle - The title of the reminder list
@@ -95,8 +98,8 @@ export async function getListEmblems(
       tell application "Reminders"
         set allLists to every list
         set resultText to ""
-        set tabChar to (ASCII character 9)
-        set newlineChar to (ASCII character 10)
+        set fieldSeparator to (ASCII character 31)
+        set recordSeparator to (ASCII character 30)
         repeat with i from 1 to count of allLists
           set currentList to item i of allLists
           set listName to name of currentList
@@ -105,9 +108,9 @@ export async function getListEmblems(
             set listEmblem to ""
           end if
           if i is 1 then
-            set resultText to listName & tabChar & listEmblem
+            set resultText to listName & fieldSeparator & listEmblem
           else
-            set resultText to resultText & newlineChar & listName & tabChar & listEmblem
+            set resultText to resultText & recordSeparator & listName & fieldSeparator & listEmblem
           end if
         end repeat
         return resultText
@@ -115,11 +118,20 @@ export async function getListEmblems(
     `;
 
     const result = await runAppleScript(script);
-    const lines = result.trim().split('\n');
     const emblemMap = new Map<string, string | undefined>();
+    const records = result
+      .split(RECORD_SEPARATOR)
+      .map((record) => record.trim())
+      .filter((record) => record.length > 0);
 
-    for (const line of lines) {
-      const [name, emblem] = line.split('\t');
+    for (const record of records) {
+      const separatorIndex = record.indexOf(FIELD_SEPARATOR);
+      if (separatorIndex < 0) {
+        continue;
+      }
+
+      const name = record.slice(0, separatorIndex);
+      const emblem = record.slice(separatorIndex + FIELD_SEPARATOR.length);
       if (listTitles.includes(name)) {
         emblemMap.set(name, emblem || undefined);
       }

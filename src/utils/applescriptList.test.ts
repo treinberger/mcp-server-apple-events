@@ -21,6 +21,8 @@ const mockEscapeAppleScriptString =
   escapeAppleScriptString as jest.MockedFunction<
     typeof escapeAppleScriptString
   >;
+const RECORD_SEPARATOR = String.fromCharCode(30);
+const FIELD_SEPARATOR = String.fromCharCode(31);
 
 describe('applescriptList', () => {
   beforeEach(() => {
@@ -143,7 +145,9 @@ describe('applescriptList', () => {
     });
 
     it('uses batch AppleScript for multiple lists', async () => {
-      mockRunAppleScript.mockResolvedValueOnce('Shopping\t🛒\nTasks\t📝');
+      mockRunAppleScript.mockResolvedValueOnce(
+        `Shopping${FIELD_SEPARATOR}🛒${RECORD_SEPARATOR}Tasks${FIELD_SEPARATOR}📝`,
+      );
 
       const result = await getListEmblems(['Shopping', 'Tasks']);
 
@@ -167,7 +171,7 @@ describe('applescriptList', () => {
 
     it('handles missing emblems in batch response', async () => {
       mockRunAppleScript.mockResolvedValueOnce(
-        'Shopping\t🛒\nNo Emblem\t\nTasks\t📝',
+        `Shopping${FIELD_SEPARATOR}🛒${RECORD_SEPARATOR}No Emblem${FIELD_SEPARATOR}${RECORD_SEPARATOR}Tasks${FIELD_SEPARATOR}📝`,
       );
 
       const result = await getListEmblems(['Shopping', 'No Emblem', 'Tasks']);
@@ -178,11 +182,24 @@ describe('applescriptList', () => {
     });
 
     it('handles single list', async () => {
-      mockRunAppleScript.mockResolvedValueOnce('Shopping\t🛒');
+      mockRunAppleScript.mockResolvedValueOnce(`Shopping${FIELD_SEPARATOR}🛒`);
 
       const result = await getListEmblems(['Shopping']);
 
       expect(result.get('Shopping')).toBe('🛒');
+      expect(mockRunAppleScript).toHaveBeenCalledTimes(1);
+    });
+
+    it('parses list names containing newlines and tabs without corrupting mapping', async () => {
+      const complexTitle = 'My\nList\tA';
+      mockRunAppleScript.mockResolvedValueOnce(
+        `${complexTitle}${FIELD_SEPARATOR}🧪${RECORD_SEPARATOR}Tasks${FIELD_SEPARATOR}📝`,
+      );
+
+      const result = await getListEmblems([complexTitle, 'Tasks']);
+
+      expect(result.get(complexTitle)).toBe('🧪');
+      expect(result.get('Tasks')).toBe('📝');
       expect(mockRunAppleScript).toHaveBeenCalledTimes(1);
     });
   });

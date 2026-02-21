@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Performance: completed reminders no longer fetched by default** — `readAll()` in the reminder repository previously always called the Swift CLI with `--showCompleted true`, fetching the entire reminder history (including all completed reminders) from EventKit before filtering client-side. The Swift CLI is now invoked with the actual `showCompleted` value from the caller (default `false`), so EventKit filtering happens at the source. This prevents unbounded response sizes that accumulate over years of completed reminders.
+
 ## [1.3.0] - 2026-02-04
 
 ### Added

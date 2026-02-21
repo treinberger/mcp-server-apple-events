@@ -131,12 +131,12 @@ class ReminderRepository {
     return reminders.map((reminder) => this.mapReminder(reminder));
   }
 
-  private async readAll(): Promise<ReminderReadResult> {
+  private async readAll(showCompleted = false): Promise<ReminderReadResult> {
     return executeCli<ReminderReadResult>([
       '--action',
       'read',
       '--showCompleted',
-      'true',
+      showCompleted ? 'true' : 'false',
     ]);
   }
 
@@ -151,7 +151,8 @@ class ReminderRepository {
   }
 
   async findReminders(filters: ReminderFilters = {}): Promise<Reminder[]> {
-    const { reminders } = await this.readAll();
+    const showCompleted = filters.showCompleted ?? false;
+    const { reminders } = await this.readAll(showCompleted);
     const normalizedReminders = this.mapReminders(reminders);
     return applyReminderFilters(normalizedReminders, filters);
   }

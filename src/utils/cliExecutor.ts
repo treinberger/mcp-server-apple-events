@@ -22,12 +22,15 @@ import {
 } from './permissionPrompt.js';
 import { findProjectRoot } from './projectUtils.js';
 
+// 50 MB – large enough for databases with thousands of reminders/events
+const EXEC_MAX_BUFFER = 50 * 1024 * 1024;
+
 const execFilePromise = (
   cliPath: string,
   args: string[],
 ): Promise<{ stdout: string; stderr: string }> =>
   new Promise((resolve, reject) => {
-    execFile(cliPath, args, (error, stdout, stderr) => {
+    execFile(cliPath, args, { maxBuffer: EXEC_MAX_BUFFER }, (error, stdout, stderr) => {
       if (error) {
         const execError = error as ExecFileException & {
           stdout?: string | Buffer;
@@ -242,7 +245,7 @@ export async function executeCli<T>(args: string[]): Promise<T> {
   const { path: cliPath } = findSecureBinaryPath(possiblePaths, config);
 
   if (!cliPath) {
-    throw new Error(
+    throw new CliUserError(
       `EventKitCLI binary not found. When installed via npx, the Swift binary must be built manually:
 
 1. Find the npx cache location:

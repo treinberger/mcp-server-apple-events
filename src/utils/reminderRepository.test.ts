@@ -132,7 +132,38 @@ describe('ReminderRepository', () => {
   });
 
   describe('findReminders', () => {
-    it('should return filtered reminders', async () => {
+    it('should call CLI with showCompleted false by default', async () => {
+      const mockReminders: Partial<Reminder>[] = [
+        { id: '1', title: 'Test 1', isCompleted: false, list: 'Default' },
+      ];
+      const mockLists: ReminderList[] = [];
+      const filteredReminders: Reminder[] = [
+        {
+          id: '1',
+          title: 'Test 1',
+          isCompleted: false,
+          list: 'Default',
+          priority: 0,
+        },
+      ];
+
+      mockExecuteCli.mockResolvedValue({
+        reminders: mockReminders,
+        lists: mockLists,
+      });
+      mockApplyReminderFilters.mockReturnValue(filteredReminders);
+
+      await repository.findReminders();
+
+      expect(mockExecuteCli).toHaveBeenCalledWith([
+        '--action',
+        'read',
+        '--showCompleted',
+        'false',
+      ]);
+    });
+
+    it('should call CLI with showCompleted false when filter is showCompleted: false', async () => {
       const mockReminders: Partial<Reminder>[] = [
         { id: '1', title: 'Test 1', isCompleted: false, list: 'Default' },
         { id: '2', title: 'Test 2', isCompleted: true, list: 'Work' },
@@ -161,12 +192,52 @@ describe('ReminderRepository', () => {
         '--action',
         'read',
         '--showCompleted',
-        'true',
+        'false',
       ]);
       expect(mockApplyReminderFilters).toHaveBeenCalledWith(
         expect.any(Array),
         filters,
       );
+      expect(result).toBe(filteredReminders);
+    });
+
+    it('should call CLI with showCompleted true when filter is showCompleted: true', async () => {
+      const mockReminders: Partial<Reminder>[] = [
+        { id: '1', title: 'Test 1', isCompleted: false, list: 'Default' },
+        { id: '2', title: 'Test 2', isCompleted: true, list: 'Work' },
+      ];
+      const filters: ReminderFilters = { showCompleted: true };
+      const filteredReminders: Reminder[] = [
+        {
+          id: '1',
+          title: 'Test 1',
+          isCompleted: false,
+          list: 'Default',
+          priority: 0,
+        },
+        {
+          id: '2',
+          title: 'Test 2',
+          isCompleted: true,
+          list: 'Work',
+          priority: 0,
+        },
+      ];
+
+      mockExecuteCli.mockResolvedValue({
+        reminders: mockReminders,
+        lists: [],
+      });
+      mockApplyReminderFilters.mockReturnValue(filteredReminders);
+
+      const result = await repository.findReminders(filters);
+
+      expect(mockExecuteCli).toHaveBeenCalledWith([
+        '--action',
+        'read',
+        '--showCompleted',
+        'true',
+      ]);
       expect(result).toBe(filteredReminders);
     });
 
@@ -282,6 +353,20 @@ describe('ReminderRepository', () => {
       const result = await repository.findAllLists();
 
       expect(result).toEqual(mockLists);
+    });
+
+    it('should call CLI with showCompleted false when fetching lists', async () => {
+      mockExecuteCli.mockResolvedValue({ reminders: [], lists: [] });
+      mockGetListEmblems.mockResolvedValue(new Map());
+
+      await repository.findAllLists();
+
+      expect(mockExecuteCli).toHaveBeenCalledWith([
+        '--action',
+        'read',
+        '--showCompleted',
+        'false',
+      ]);
     });
 
     it('should return empty array when no lists', async () => {

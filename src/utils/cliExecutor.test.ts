@@ -18,6 +18,7 @@ import {
   escapeAppleScriptString,
   executeCli,
 } from './cliExecutor.js';
+import { CliUserError } from './errorHandling.js';
 import {
   hasBeenPrompted,
   triggerPermissionPrompt,
@@ -128,6 +129,7 @@ describe('cliExecutor', () => {
       expect(mockExecFile).toHaveBeenCalledWith(
         '/test/project/bin/EventKitCLI',
         ['--action', 'read', '--id', '123'],
+        expect.objectContaining({ maxBuffer: expect.any(Number) }),
         expect.any(Function),
       );
     });
@@ -161,12 +163,19 @@ describe('cliExecutor', () => {
       }
     });
 
-    it('throws error when binary path validation fails', async () => {
+    it('throws CliUserError when binary path validation fails', async () => {
       mockFindSecureBinaryPath.mockReturnValue({ path: null });
 
       await expect(
         executeCli(['--action', 'read', '--id', '123']),
       ).rejects.toThrow('EventKitCLI binary not found');
+
+      try {
+        await executeCli(['--action', 'read', '--id', '123']);
+      } catch (error) {
+        expect(error).toBeInstanceOf(CliUserError);
+        expect((error as CliUserError).name).toBe('CliUserError');
+      }
     });
 
     it('wraps unexpected exec failures', async () => {
@@ -254,6 +263,7 @@ describe('cliExecutor', () => {
       expect(mockExecFile).toHaveBeenCalledWith(
         '/custom/project/path/bin/EventKitCLI',
         ['--action', 'read'],
+        expect.objectContaining({ maxBuffer: expect.any(Number) }),
         expect.any(Function),
       );
     });

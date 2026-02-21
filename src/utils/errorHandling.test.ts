@@ -99,6 +99,30 @@ describe('ErrorHandling', () => {
       if (originalDebug) process.env.DEBUG = originalDebug;
     });
 
+    it('shows binary-not-found instructions in production mode', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalDebug = process.env.DEBUG;
+      delete process.env.DEBUG;
+      process.env.NODE_ENV = 'production';
+
+      const binaryNotFoundError = new CliUserError(
+        'EventKitCLI binary not found. When installed via npx, the Swift binary must be built manually:\n\n1. Find the npx cache location:\n   pnpm store path',
+      );
+      const mockOperation = jest
+        .fn()
+        .mockRejectedValue(binaryNotFoundError);
+
+      const result = await handleAsyncOperation(mockOperation, 'read reminders');
+
+      expect(result.isError).toBe(true);
+      const text = (result.content[0] as { type: 'text'; text: string }).text;
+      expect(text).toContain('EventKitCLI binary not found');
+      expect(text).toContain('pnpm store path');
+
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalDebug) process.env.DEBUG = originalDebug;
+    });
+
     it.each([
       ['create reminder', 'Failed to create reminder'],
       ['update reminder', 'Failed to update reminder'],
